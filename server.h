@@ -5,9 +5,11 @@
 #ifndef HTTP_SERVER_H
 #define HTTP_SERVER_H
 
+#include "http.h"
+
 typedef struct connect_t{
     int fd;
-
+    Request_t *request;
 };
 
 

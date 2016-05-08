@@ -130,6 +130,7 @@ void main_loop(int epollfd,int serverfd){
                 }
                 else if(events[i].events&EPOLLOUT){
                     //删除监听事件
+
                     register_event(epollfd,events[i].data.fd,EPOLL_CTL_DEL,EPOLLIN);
                     close(sfd);//关闭连接
                     number--;

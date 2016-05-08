@@ -24,10 +24,17 @@ typedef struct Request{
     Str_t version;
     Str_t* header;
     size_t size;
+    Str_t* parametar;
+    Str_t psize;
     Str_t body;
+
+    int stat_code;
+    Str_t buf;
+    int file_fd;
+    int file_size;
 } Request_t;
 
 Request_t* request_create();
-Request_t* http_parse(char* content,int fd);
+Request_t* http_parse(char* content,int sfd);
 
 #endif //HTTP_HTTP_H

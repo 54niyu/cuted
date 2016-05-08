@@ -21,10 +21,11 @@ void request_delete(Request_t* request){
     free(request);
 }
 
-Request_t* http_parse(char* content,int fd){
+Request_t* http_parse(char* content,int sfd){
 
     char *ptr=content;
-    Request_t* request=request_create();
+    Request_t *request=request_create();
+    request->fd=sfd;
 
     if(*ptr=='G'){
        if(strncmp(ptr,"GET",3)==0)
@@ -46,6 +47,7 @@ Request_t* http_parse(char* content,int fd){
         }
     }else{
         perror("Unknown");
+        request->stat_code=4;
         return NULL;
     }
 
@@ -60,10 +62,11 @@ Request_t* http_parse(char* content,int fd){
             ptr++;
         }
     }else{
+        request->stat_code=4;
        perror("URI"); return NULL;
     }
 
-    printStr2(request->uri);
+  //  printStr2(request->uri);
 
     while(*ptr==' ')
         ptr++;
@@ -79,26 +82,29 @@ Request_t* http_parse(char* content,int fd){
         if(*(++ptr)=='\n'){
             ptr++;
         }else{
+            request->stat_code=4;
             perror("Line\n");return NULL;
         }
     }
     else{
+        request->stat_code=4;
         perror("Unkown Http version\n");return NULL;
     }
 
-    printStr2(request->version);
+   // printStr2(request->version);
 
     while(*ptr!='\0'){
         if(*ptr=='\r'&&*(ptr+1)=='\n'){
            ptr+=2;
+            break;
         }else{
             request->header[request->size].str=ptr;
             request->header[request->size].size=0;
             while(*ptr!=':'){
                 ptr++;request->header[request->size].size++;
             }
-            printStr2(request->header[request->size]);
-            write(STDOUT_FILENO,":",1);
+    //        printStr2(request->header[request->size]);
+    //        write(STDOUT_FILENO,":",1);
             ptr++;
             request->size++;
             request->header[request->size].str=ptr;
@@ -106,22 +112,29 @@ Request_t* http_parse(char* content,int fd){
             while(*ptr!='\r'){
                 ptr++;request->header[request->size].size++;
             }
-            printStr2(request->header[request->size]);
             request->size++;
-            printf("\n");
+            if(*(++ptr)=='\n')
+                ptr++;
         }
+    }
+    request->body.str=ptr;
+    request->size=0;
+    while(*ptr!='\0'){
+       ptr++;request->size++;
     }
 
     http_handle(request);
+    response(request);
 }
 void http_handle(Request_t *req){
     char path[256]={'\0'};
     strncpy(path,"/home/think/html",16);
     strncpy(path+16,req->uri.str,req->uri.size);
-    char* ptr=path;
+    //uri初始化路径
+
     int idx=strchr(path,'?');
     if(idx==0){
-        printf("no get paragram\n");
+        printf("no paragram\n");
     }else{
         path[idx]='\0';
     }
@@ -137,22 +150,33 @@ void http_handle(Request_t *req){
     int ret=stat(path,&file_state);
 
     if(ret!=0){
-        perror("File");
-        write(req->fd,"HTTP/1.1 400 BAD REQUEST\r\n\r\n",200);
+        req->stat_code=4;
         return ;
     }
 
     int fd=open(path,O_RDONLY);
     if(fd<0){
-        perror("Open file");
+        req->stat_code=4;
         return;
     }
 
-    char *res="HTTP/1.1 200 OK\r\n\r\n";
-    write(req->fd,res,strlen(res));
-    sendfile(req->fd,fd,NULL,file_state.st_size);
+    req->file_fd=fd;
+    req->stat_code=2;
+    req->file_size=file_state.st_size;
 }
-char *response(Request_t *req){
+void response(Request_t *req){
+
+    switch(req->stat_code){
+        case 2:{
+            char *s="HTTP/1.1 200 OK\r\n\r\n";
+           write(req->fd,s,strlen(s));
+            sendfile(req->fd,req->file_fd,NULL,req->file_size);
+        };break;
+        case 4:{
+            char *s="HTTP/1.1 400 BAD REQUEST\r\n\r\n";
+            write(req->fd,s,strlen(s));
+        };break;
+    }
 
 }
 
