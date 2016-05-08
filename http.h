@@ -20,12 +20,14 @@ typedef struct Str{
 typedef struct Request{
     int fd;
     int method;
-    Str_t* uri;
-    Str_t* version;
+    Str_t uri;
+    Str_t version;
     Str_t* header;
     size_t size;
+    Str_t body;
 } Request_t;
 
+Request_t* request_create();
 Request_t* http_parse(char* content,int fd);
 
 #endif //HTTP_HTTP_H
