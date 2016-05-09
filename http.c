@@ -15,17 +15,15 @@ Request_t* request_create(){
     return request;
 }
 void request_delete(Request_t* request){
-    if(!request){
-        free(request->header);
-    }
+  //  if(request->header!=NULL)   free(request->header);
     free(request);
 }
 
-Request_t* http_parse(char* content,int sfd){
-
+Request_t* http_parse(char *content,Request_t *request){
+  //  printf("%s\n",content);
     char *ptr=content;
-    Request_t *request=request_create();
-    request->fd=sfd;
+   // Request_t *request=request_create();
+   // request->fd=sfd;
 
     if(*ptr=='G'){
        if(strncmp(ptr,"GET",3)==0)
@@ -46,10 +44,12 @@ Request_t* http_parse(char* content,int sfd){
             request->method=3;
         }
     }else{
-        perror("Unknown");
+        printf("Unkown methon\n");
         request->stat_code=4;
         return NULL;
     }
+
+    printf("Methon %d\n",request->method);
 
     while(*ptr==' ')
         ptr++;
@@ -124,7 +124,7 @@ Request_t* http_parse(char* content,int sfd){
     }
 
     http_handle(request);
-    response(request);
+ //   response(request);
 }
 void http_handle(Request_t *req){
     char path[256]={'\0'};
@@ -171,12 +171,14 @@ void response(Request_t *req){
             char *s="HTTP/1.1 200 OK\r\n\r\n";
            write(req->fd,s,strlen(s));
             sendfile(req->fd,req->file_fd,NULL,req->file_size);
+            close(req->file_fd);
         };break;
         case 4:{
             char *s="HTTP/1.1 400 BAD REQUEST\r\n\r\n";
             write(req->fd,s,strlen(s));
         };break;
     }
+    printf("Handle over\n");
 
 }
 

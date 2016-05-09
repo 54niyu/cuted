@@ -17,6 +17,7 @@
 #include<pthread.h>
 
 #include "http.h"
+#include "server.h"
 
 #define MAX_LISTEN 128
 #define MAX_EVENT 128
@@ -92,7 +93,7 @@ void main_loop(int epollfd,int serverfd){
     int ret=0;
     while(1){
 
-        ret=epoll_wait(epollfd,&events,MAX_EVENT,0);
+        ret=epoll_wait(epollfd,&events,MAX_EVENT,-1);
         if(ret<0){
             perror("Epoll wait");return;
         }
@@ -111,27 +112,65 @@ void main_loop(int epollfd,int serverfd){
                             perror("Accept");
                             continue;
                         }
+                        Connect_t *con=(Connect_t*)malloc(sizeof(Connect_t));
+
+                        struct epoll_event ev;
+                        bzero(&ev,sizeof(ev));
+                        con->fd=clientfd;con->addr=client_addr;
+                        con->read_buf=(char*)malloc(10240);
+                        con->request=request_create();
+                        ev.data.ptr=con;
+                        ev.events=EPOLLIN;
+                        if(epoll_ctl(epollfd,EPOLL_CTL_ADD,clientfd,&ev)==-1){
+
+                            perror("Epoll add:");
+                            continue;
+                        }
+
                         number++;
-                        register_event(epollfd, clientfd, EPOLL_CTL_ADD, EPOLLIN);
+
                     }
                 }
 
             }else{
-
+                int sfd=((Connect_t*)events[i].data.ptr)->fd;
                 if(events[i].events&EPOLLIN){
-                    char buf[5120]={'\0'};
-                    int num=recv(sfd,buf,5120,0);
-                    if(num>0){
-                        buf[num+1]='\0';
-                        http_parse(buf,sfd);
-                        //注册写监听事件
-                        register_event(epollfd,events[i].data.fd,EPOLL_CTL_MOD,EPOLLOUT);
+                    //处理读事件
+                    Connect_t *con=(Connect_t*)events[i].data.ptr;
+
+
+                    int len=read(con->fd,con->read_buf,10240);
+                    if(len<=0){
+             //           printf("Nothing to read why remind me ???\n");
+                        continue;
+                    }else{
+                        printf("Receive %d bytes\n",len);
                     }
+                    con->read_buf[len]='\0';
+                    con->request->fd=sfd;
+
+                    http_parse(con->read_buf,con->request);
+
+                    struct epoll_event ev;
+                    bzero(&ev,sizeof(ev));
+                    ev.data.ptr=events[i].data.ptr;
+                    ev.events|=EPOLLOUT;
+                    if(epoll_ctl(epollfd,EPOLL_CTL_MOD,con->fd,&ev)==-1){
+
+                        perror("Epoll mod");
+                    }
+
                 }
                 else if(events[i].events&EPOLLOUT){
-                    //删除监听事件
 
-                    register_event(epollfd,events[i].data.fd,EPOLL_CTL_DEL,EPOLLIN);
+                    //处理写事件
+                    response(((Connect_t *)events[i].data.ptr)->request);
+
+                    //删除监听事件
+                    request_delete(((Connect_t*)events[i].data.ptr)->request);
+                    free(((Connect_t*)events[i].data.ptr)->read_buf);
+                    free((Connect_t*)events[i].data.ptr);
+                    register_event(epollfd,sfd,EPOLL_CTL_DEL,EPOLLIN);
                     close(sfd);//关闭连接
                     number--;
                 }else{
@@ -170,7 +209,7 @@ void register_signal(){
     signal(SIGTERM,signal_hander);
 }
 
-void register_event(int epollfd,int fd, unsigned int op, unsigned int e){
+void register_event(int epollfd,int fd, unsigned int op,unsigned int e){
     struct epoll_event event;
     bzero(&event,sizeof(event));
     event.data.fd=fd;

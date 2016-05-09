@@ -35,6 +35,7 @@ typedef struct Request{
 } Request_t;
 
 Request_t* request_create();
-Request_t* http_parse(char* content,int sfd);
-
+void request_delete(Request_t *req);
+Request_t* http_parse(char* content,Request_t *request);
+void response(Request_t *req);
 #endif //HTTP_HTTP_H
