@@ -15,6 +15,8 @@
 #include<stdlib.h>
 #include<sys/epoll.h>
 #include<pthread.h>
+#include <wait.h>
+#include<semaphore.h>
 
 #include "http.h"
 #include "server.h"
@@ -24,11 +26,27 @@
 
 void hander_configure();//配置处理
 int bind_server(char *addr, int port);//初始化参数，bind服务器
-void main_loop(int epollfd,int serverfd);//主循环
+void main_loop(int serverfd);//主循环
 void signal_hander(int sig);//信号处理函数
 void register_signal();//信号注册
 void register_event(int epollfd,int fd, unsigned int op, unsigned int e);//事件处理
 
+Connect_t *connect_create(){
+    Connect_t * con=(Connect_t*)calloc(1,sizeof(Connect_t));
+    con->read_buf=(char*)malloc(2048);
+    con->request=request_create();
+    return con;
+}
+
+void connect_delete(Connect_t *con){
+    request_delete(con->request);
+    free(con->read_buf);
+    free(con);
+    con=NULL;
+}
+  sem_t sem_socket;
+  int worker=0;
+  int workerpid[2];
 
 int main(int argc,char *argv[]){
 
@@ -36,13 +54,33 @@ int main(int argc,char *argv[]){
 
     int serverfd=bind_server("127.0.0.1",8080);
 
-    register_signal();
+   // register_signal();
 
-    int epollfd=epoll_create1(0);
 
-    register_event(epollfd,serverfd,EPOLL_CTL_ADD,EPOLLIN);
 
-    main_loop(epollfd,serverfd);
+    if(sem_init(&sem_socket,1,1)<0) perror("Sem");
+
+ //   int worker=0;
+    int i=0;
+    for(;i<2;i++){
+        int pid=0;
+        if((pid=fork())==0){
+            worker=1;
+            break;
+        }else{
+            workerpid[i]=pid;
+        }
+    }
+
+    if(worker==0){
+        printf("%d  I get two child %d %d\n",getpid(),workerpid[0],workerpid[1]);
+    }else{
+        printf("I am child %d \n",getpid());
+    //    register_signal();
+    }
+
+
+    main_loop(serverfd);
 
     return 0;
 }
@@ -80,30 +118,41 @@ int bind_server(char *addr, int port){
     }
 
     printf("--------Server is listening on %s %d  => pid:%d  listening on fd:%d\n",addr,port,getpid(),server_fd);
+
     return server_fd;
 }
 
 void hander_configure(){
 
 }
-void main_loop(int epollfd,int serverfd){
+void main_loop(int serverfd){
+
+    int epollfd=epoll_create1(0);
+
+    struct epoll_event ev;
+    Connect_t* con=connect_create();con->fd=serverfd;
+    ev.events=EPOLLIN;ev.data.ptr=con;
+    epoll_ctl(epollfd,EPOLL_CTL_ADD,serverfd,&ev);
+    // register_event(epollfd,serverfd,EPOLL_CTL_ADD,EPOLLIN);
 
     struct epoll_event events[MAX_EVENT];
     int number=0;
     int ret=0;
     while(1){
 
-        ret=epoll_wait(epollfd,&events,MAX_EVENT,-1);
+        ret=epoll_wait(epollfd,&events,MAX_EVENT,2);
         if(ret<0){
-            perror("Epoll wait");return;
+            perror("Epoll wait");
+            continue;
         }
 
         int i=0;
         for(;i<ret;i++){
-           int sfd=events[i].data.fd;
+           int sfd=((Connect_t*)events[i].data.ptr)->fd;
             if(sfd==serverfd){
 
                 if(events[i].events&EPOLLIN){
+               //     sem_wait(&sem_socket);
                     if(number<MAX_EVENT) {
                         struct sockaddr_in client_addr;
                         socklen_t len = sizeof(client_addr);
@@ -112,39 +161,40 @@ void main_loop(int epollfd,int serverfd){
                             perror("Accept");
                             continue;
                         }
-                        Connect_t *con=(Connect_t*)malloc(sizeof(Connect_t));
+                        printf("process %d get clent %d  ",getpid(),clientfd);
+
+                        Connect_t *con=connect_create();
+                        con->fd=clientfd;//con->addr=client_addr;
+
 
                         struct epoll_event ev;
                         bzero(&ev,sizeof(ev));
-                        con->fd=clientfd;con->addr=client_addr;
-                        con->read_buf=(char*)malloc(10240);
-                        con->request=request_create();
                         ev.data.ptr=con;
-                        ev.events=EPOLLIN;
-                        if(epoll_ctl(epollfd,EPOLL_CTL_ADD,clientfd,&ev)==-1){
+                        ev.events=EPOLLIN|EPOLLET;
 
+                        if(epoll_ctl(epollfd,EPOLL_CTL_ADD,clientfd,&ev)==-1){
                             perror("Epoll add:");
                             continue;
                         }
-
+                        setnonblocking(clientfd);
                         number++;
-
                     }
+                //   sem_post(&sem_socket);
                 }
 
             }else{
-                int sfd=((Connect_t*)events[i].data.ptr)->fd;
                 if(events[i].events&EPOLLIN){
                     //处理读事件
                     Connect_t *con=(Connect_t*)events[i].data.ptr;
 
 
-                    int len=read(con->fd,con->read_buf,10240);
+                    int len=read(con->fd,con->read_buf,1024);
                     if(len<=0){
-             //           printf("Nothing to read why remind me ???\n");
+          //              perror("What is wrong");
+                        printf("Nothing to read why remind me ???\n");
                         continue;
                     }else{
-                        printf("Receive %d bytes\n",len);
+          //              printf("Receive %d bytes\n",len);
                     }
                     con->read_buf[len]='\0';
                     con->request->fd=sfd;
@@ -154,7 +204,7 @@ void main_loop(int epollfd,int serverfd){
                     struct epoll_event ev;
                     bzero(&ev,sizeof(ev));
                     ev.data.ptr=events[i].data.ptr;
-                    ev.events|=EPOLLOUT;
+                    ev.events=EPOLLOUT;
                     if(epoll_ctl(epollfd,EPOLL_CTL_MOD,con->fd,&ev)==-1){
 
                         perror("Epoll mod");
@@ -167,9 +217,7 @@ void main_loop(int epollfd,int serverfd){
                     response(((Connect_t *)events[i].data.ptr)->request);
 
                     //删除监听事件
-                    request_delete(((Connect_t*)events[i].data.ptr)->request);
-                    free(((Connect_t*)events[i].data.ptr)->read_buf);
-                    free((Connect_t*)events[i].data.ptr);
+                    connect_delete(events[i].data.ptr);
                     register_event(epollfd,sfd,EPOLL_CTL_DEL,EPOLLIN);
                     close(sfd);//关闭连接
                     number--;
@@ -196,9 +244,19 @@ void signal_hander(int sig){
         case SIGCHLD:{
 
         };
+        case SIGQUIT:{
+
+        };
+        case SIGKILL:{
+
+        }
         default:{
+            if(worker==0) {
+                kill(workerpid[0], SIGTERM);
+                kill(workerpid[1], SIGTERM);
+            }
             printf("You are terminated by signal %d",sig);
-            exit(sig);
+            //exit(sig);
         }
     }
 }
@@ -207,6 +265,8 @@ void register_signal(){
     signal(SIGALRM,signal_hander);
     signal(SIGHUP,signal_hander);
     signal(SIGTERM,signal_hander);
+    signal(SIGQUIT,signal_hander);
+    signal(SIGKILL,signal_hander);
 }
 
 void register_event(int epollfd,int fd, unsigned int op,unsigned int e){
@@ -216,4 +276,10 @@ void register_event(int epollfd,int fd, unsigned int op,unsigned int e){
     event.events=e;
     epoll_ctl(epollfd,op,fd,&event);
     return;
+}
+int setnonblocking(int fd){
+    int old_option=fcntl(fd,F_GETFL);
+    int new_option=old_option|O_NONBLOCK;
+    fcntl(fd,F_SETFL,new_option);
+    return old_option;
 }

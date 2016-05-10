@@ -15,16 +15,12 @@ Request_t* request_create(){
     return request;
 }
 void request_delete(Request_t* request){
-  //  if(request->header!=NULL)   free(request->header);
-    free(request);
+    if(request->header!=NULL) free(request->header); free(request);
 }
 
 Request_t* http_parse(char *content,Request_t *request){
-  //  printf("%s\n",content);
     char *ptr=content;
-   // Request_t *request=request_create();
-   // request->fd=sfd;
-
+    printf("%s\n",ptr);
     if(*ptr=='G'){
        if(strncmp(ptr,"GET",3)==0)
            ptr+=3;
@@ -134,7 +130,7 @@ void http_handle(Request_t *req){
 
     int idx=strchr(path,'?');
     if(idx==0){
-        printf("no paragram\n");
+ //       printf("no paragram\n");
     }else{
         path[idx]='\0';
     }
@@ -144,7 +140,7 @@ void http_handle(Request_t *req){
         strncat(path,"index.html",10);
     }
 
-    printf("%s\n",path);
+//    printf("%s\n",path);
 
     struct stat file_state;
     int ret=stat(path,&file_state);
