@@ -34,10 +34,12 @@ Connect_t *connect_create();
 void connect_delete(Connect_t *con);
 
 
-  sem_t sem_socket;
-  int worker=0;
-  int workerpid[2];
-  int multiprocess=1;
+sem_t sem_socket;
+int worker=0;
+int workerpid[2];
+int multiprocess=1;
+int run=1;
+
 
 int main(int argc,char *argv[]){
 
@@ -64,11 +66,15 @@ int main(int argc,char *argv[]){
             printf("%d  I get two child %d %d\n", getpid(), workerpid[0], workerpid[1]);
         } else {
             printf("I am child %d \n", getpid());
-            //    register_signal();
         }
     }
 
+    register_signal();//注册事件处理
+
+    printf("worker:%d mul:%d run:%d   ",worker,multiprocess,run);
     main_loop(serverfd);//主循环
+
+    close(serverfd);
 
     return 0;
 }
@@ -126,7 +132,23 @@ void main_loop(int serverfd){
 
     while(1){
 
-        ret=epoll_wait(epollfd,&events,MAX_EVENT,2);
+        if(run==0){
+            if(multiprocess==1) {
+                if(worker==0){
+                    //杀死子进程
+                    printf("Send kill to children  ");
+                    int stat;
+                    kill(SIGTERM, workerpid[0]);
+                    kill(SIGTERM, workerpid[1]);
+                   // wait(&stat);
+                    wait(&stat);
+                }
+            }
+            printf("server pid=%d stop\n",getpid());
+            break;
+        }
+
+        ret=epoll_wait(epollfd,&events,MAX_EVENT,-1);
         if(ret<0){
             perror("Epoll wait");
             continue;
@@ -150,7 +172,7 @@ void main_loop(int serverfd){
                         printf("process %d get clent %d  ",getpid(),clientfd);
 
                         Connect_t *con=connect_create();
-                        con->fd=clientfd;//con->addr=client_addr;
+                        con->fd=clientfd;con->addr=client_addr;
 
 
                         struct epoll_event ev;
@@ -216,6 +238,8 @@ void main_loop(int serverfd){
 
 void signal_hander(int sig){
 
+    run=0;
+
     switch(sig){
         case SIGTERM:{
 
@@ -236,12 +260,7 @@ void signal_hander(int sig){
 
         }
         default:{
-            if(worker==0) {
-                kill(workerpid[0], SIGTERM);
-                kill(workerpid[1], SIGTERM);
-            }
-            printf("You are terminated by signal %d",sig);
-            exit(sig);
+            run=0;
         }
     }
 }
