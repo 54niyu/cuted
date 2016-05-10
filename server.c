@@ -30,23 +30,14 @@ void main_loop(int serverfd);//主循环
 void signal_hander(int sig);//信号处理函数
 void register_signal();//信号注册
 void register_event(int epollfd,int fd, unsigned int op, unsigned int e);//事件处理
+Connect_t *connect_create();
+void connect_delete(Connect_t *con);
 
-Connect_t *connect_create(){
-    Connect_t * con=(Connect_t*)calloc(1,sizeof(Connect_t));
-    con->read_buf=(char*)malloc(2048);
-    con->request=request_create();
-    return con;
-}
 
-void connect_delete(Connect_t *con){
-    request_delete(con->request);
-    free(con->read_buf);
-    free(con);
-    con=NULL;
-}
   sem_t sem_socket;
   int worker=0;
   int workerpid[2];
+  int multiprocess=1;
 
 int main(int argc,char *argv[]){
 
@@ -54,33 +45,30 @@ int main(int argc,char *argv[]){
 
     int serverfd=bind_server("127.0.0.1",8080);
 
-   // register_signal();
-
-
 
     if(sem_init(&sem_socket,1,1)<0) perror("Sem");
 
- //   int worker=0;
-    int i=0;
-    for(;i<2;i++){
-        int pid=0;
-        if((pid=fork())==0){
-            worker=1;
-            break;
-        }else{
-            workerpid[i]=pid;
+    if(multiprocess==1) {
+        //多线程模式
+        int i = 0;
+        for (; i < 2; i++) {
+            int pid = 0;
+            if ((pid = fork()) == 0) {
+                worker = 1;
+                break;
+            } else {
+                workerpid[i] = pid;
+            }
+        }
+        if (worker == 0) {
+            printf("%d  I get two child %d %d\n", getpid(), workerpid[0], workerpid[1]);
+        } else {
+            printf("I am child %d \n", getpid());
+            //    register_signal();
         }
     }
 
-    if(worker==0){
-        printf("%d  I get two child %d %d\n",getpid(),workerpid[0],workerpid[1]);
-    }else{
-        printf("I am child %d \n",getpid());
-    //    register_signal();
-    }
-
-
-    main_loop(serverfd);
+    main_loop(serverfd);//主循环
 
     return 0;
 }
@@ -129,15 +117,13 @@ void main_loop(int serverfd){
 
     int epollfd=epoll_create1(0);
 
-    struct epoll_event ev;
-    Connect_t* con=connect_create();con->fd=serverfd;
-    ev.events=EPOLLIN;ev.data.ptr=con;
-    epoll_ctl(epollfd,EPOLL_CTL_ADD,serverfd,&ev);
-    // register_event(epollfd,serverfd,EPOLL_CTL_ADD,EPOLLIN);
+
+    register_event(epollfd,serverfd,EPOLL_CTL_ADD,EPOLLIN);
 
     struct epoll_event events[MAX_EVENT];
     int number=0;
     int ret=0;
+
     while(1){
 
         ret=epoll_wait(epollfd,&events,MAX_EVENT,2);
@@ -190,7 +176,6 @@ void main_loop(int serverfd){
 
                     int len=read(con->fd,con->read_buf,1024);
                     if(len<=0){
-          //              perror("What is wrong");
                         printf("Nothing to read why remind me ???\n");
                         continue;
                     }else{
@@ -256,7 +241,7 @@ void signal_hander(int sig){
                 kill(workerpid[1], SIGTERM);
             }
             printf("You are terminated by signal %d",sig);
-            //exit(sig);
+            exit(sig);
         }
     }
 }
@@ -267,14 +252,23 @@ void register_signal(){
     signal(SIGTERM,signal_hander);
     signal(SIGQUIT,signal_hander);
     signal(SIGKILL,signal_hander);
+    signal(SIGSEGV,signal_hander);
 }
 
 void register_event(int epollfd,int fd, unsigned int op,unsigned int e){
+    if(op&EPOLL_CTL_DEL){
+        epoll_ctl(epollfd,op,fd,NULL);
+        return;
+    }
+
     struct epoll_event event;
     bzero(&event,sizeof(event));
-    event.data.fd=fd;
+    Connect_t* con=connect_create();
+    con->fd=fd;
+    event.data.ptr=con;
     event.events=e;
     epoll_ctl(epollfd,op,fd,&event);
+
     return;
 }
 int setnonblocking(int fd){
@@ -282,4 +276,18 @@ int setnonblocking(int fd){
     int new_option=old_option|O_NONBLOCK;
     fcntl(fd,F_SETFL,new_option);
     return old_option;
+}
+
+Connect_t *connect_create(){
+    Connect_t * con=(Connect_t*)calloc(1,sizeof(Connect_t));
+    con->read_buf=(char*)malloc(2048);
+    con->request=request_create();
+    return con;
+}
+
+void connect_delete(Connect_t *con){
+    request_delete(con->request);
+    free(con->read_buf);
+    free(con);
+    con=NULL;
 }

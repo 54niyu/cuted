@@ -9,18 +9,17 @@
 
 void http_handle(Request_t *req);
 Request_t* request_create(){
-
     Request_t *request=(Request_t *)calloc(1,sizeof(Request_t));
     request->header=(Str_t*)calloc(20,sizeof(Str_t));
     return request;
 }
 void request_delete(Request_t* request){
-    if(request->header!=NULL) free(request->header); free(request);
+    if(request->header!=NULL) free(request->header);
+    free(request);
 }
 
 Request_t* http_parse(char *content,Request_t *request){
     char *ptr=content;
-    printf("%s\n",ptr);
     if(*ptr=='G'){
        if(strncmp(ptr,"GET",3)==0)
            ptr+=3;
@@ -45,7 +44,7 @@ Request_t* http_parse(char *content,Request_t *request){
         return NULL;
     }
 
-    printf("Methon %d\n",request->method);
+    printf("Methon %d  ",request->method);
 
     while(*ptr==' ')
         ptr++;
@@ -62,7 +61,7 @@ Request_t* http_parse(char *content,Request_t *request){
        perror("URI"); return NULL;
     }
 
-  //  printStr2(request->uri);
+   // printStr2(request->uri);
 
     while(*ptr==' ')
         ptr++;
@@ -99,8 +98,7 @@ Request_t* http_parse(char *content,Request_t *request){
             while(*ptr!=':'){
                 ptr++;request->header[request->size].size++;
             }
-    //        printStr2(request->header[request->size]);
-    //        write(STDOUT_FILENO,":",1);
+
             ptr++;
             request->size++;
             request->header[request->size].str=ptr;
@@ -120,7 +118,7 @@ Request_t* http_parse(char *content,Request_t *request){
     }
 
     http_handle(request);
- //   response(request);
+
 }
 void http_handle(Request_t *req){
     char path[256]={'\0'};
