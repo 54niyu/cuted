@@ -24,10 +24,10 @@
 #define MAX_LISTEN 128
 #define MAX_EVENT 128
 
-void hander_configure();//配置处理
+void handle_configure();//配置处理
 int bind_server(char *addr, int port);//初始化参数，bind服务器
 void main_loop(int serverfd);//主循环
-void signal_hander(int sig);//信号处理函数
+void signal_handler(int sig);//信号处理函数
 void register_signal();//信号注册
 void register_event(int epollfd,int fd, unsigned int op, unsigned int e);//事件处理
 Connect_t *connect_create();
@@ -36,17 +36,19 @@ void connect_delete(Connect_t *con);
 
 sem_t sem_socket;
 int worker=0;
-int workerpid[2];
-int multiprocess=1;
+int workerpid[2]={0};
+int multiprocess=0;
+int num_of_process=2;
 int run=1;
 
 
 int main(int argc,char *argv[]){
 
-    hander_configure();
+    handle_configure();
 
     int serverfd=bind_server("127.0.0.1",8080);
 
+    register_signal();//注册事件处理
 
     if(sem_init(&sem_socket,1,1)<0) perror("Sem");
 
@@ -56,22 +58,17 @@ int main(int argc,char *argv[]){
         for (; i < 2; i++) {
             int pid = 0;
             if ((pid = fork()) == 0) {
+                //子进程
                 worker = 1;
                 break;
             } else {
+                //主进程
                 workerpid[i] = pid;
             }
         }
-        if (worker == 0) {
-            printf("%d  I get two child %d %d\n", getpid(), workerpid[0], workerpid[1]);
-        } else {
-            printf("I am child %d \n", getpid());
-        }
+        if(worker==0) printf("%d  I get two child %d %d\n", getpid(), workerpid[0], workerpid[1]);
     }
 
-    register_signal();//注册事件处理
-
-    printf("worker:%d mul:%d run:%d   ",worker,multiprocess,run);
     main_loop(serverfd);//主循环
 
     close(serverfd);
@@ -112,17 +109,16 @@ int bind_server(char *addr, int port){
     }
 
     printf("--------Server is listening on %s %d  => pid:%d  listening on fd:%d\n",addr,port,getpid(),server_fd);
-
     return server_fd;
 }
 
-void hander_configure(){
+void handle_configure(){
+
 
 }
 void main_loop(int serverfd){
 
     int epollfd=epoll_create1(0);
-
 
     register_event(epollfd,serverfd,EPOLL_CTL_ADD,EPOLLIN);
 
@@ -133,24 +129,18 @@ void main_loop(int serverfd){
     while(1){
 
         if(run==0){
-            if(multiprocess==1) {
-                if(worker==0){
-                    //杀死子进程
-                    printf("Send kill to children  ");
-                    int stat;
-                    kill(SIGTERM, workerpid[0]);
-                    kill(SIGTERM, workerpid[1]);
-                   // wait(&stat);
-                    wait(&stat);
-                }
+            if(worker==0&&multiprocess==1){
+                write(STDOUT_FILENO,"Kill",4);
+                kill(workerpid[0],15);
+                kill(workerpid[1],15);
             }
-            printf("server pid=%d stop\n",getpid());
+            printf("%d will stop\n",getpid());
             break;
         }
 
         ret=epoll_wait(epollfd,&events,MAX_EVENT,-1);
         if(ret<0){
-            perror("Epoll wait");
+            perror("Epoll_wait");
             continue;
         }
 
@@ -225,8 +215,11 @@ void main_loop(int serverfd){
 
                     //删除监听事件
                     connect_delete(events[i].data.ptr);
+
                     register_event(epollfd,sfd,EPOLL_CTL_DEL,EPOLLIN);
+
                     close(sfd);//关闭连接
+
                     number--;
                 }else{
                     printf("Something else\n");
@@ -235,44 +228,41 @@ void main_loop(int serverfd){
         }
     }
 }
+void signal_handler(int sig){
 
-void signal_hander(int sig){
+    printf("Caught %s\n",sys_siglist[sig]);
 
-    run=0;
-
-    switch(sig){
-        case SIGTERM:{
-
-        };
-        case SIGHUP:{
-
-        };
-        case SIGALRM:{
-
-        };
+    switch (sig){
         case SIGCHLD:{
+            int s;
+            int pid=wait(&s);
+            printf("Child %d exit\n",pid);
 
-        };
-        case SIGQUIT:{
-
-        };
-        case SIGKILL:{
-
-        }
-        default:{
+        };break;
+        case SIGTERM:
+        case SIGINT:
+        case SIGSEGV:{
             run=0;
-        }
+        };
     }
 }
 void register_signal(){
-    signal(SIGCHLD,signal_hander);
-    signal(SIGALRM,signal_hander);
-    signal(SIGHUP,signal_hander);
-    signal(SIGTERM,signal_hander);
-    signal(SIGQUIT,signal_hander);
-    signal(SIGKILL,signal_hander);
-    signal(SIGSEGV,signal_hander);
+
+    addsig(SIGCHLD);
+    addsig(SIGABRT);
+    addsig(SIGTERM);
+    addsig(SIGINT);
+    addsig(SIGSEGV);
 }
+void addsig(int sig){
+    struct sigaction sa;
+    memset(&sa,'\0',sizeof(sa));
+    sa.sa_handler=signal_handler;
+    sa.sa_flags|=SA_RESTART;
+    sigfillset(&sa.sa_mask);
+    assert(sigaction(sig,&sa,NULL)!=-1);
+}
+
 
 void register_event(int epollfd,int fd, unsigned int op,unsigned int e){
     if(op&EPOLL_CTL_DEL){
@@ -290,6 +280,7 @@ void register_event(int epollfd,int fd, unsigned int op,unsigned int e){
 
     return;
 }
+
 int setnonblocking(int fd){
     int old_option=fcntl(fd,F_GETFL);
     int new_option=old_option|O_NONBLOCK;
@@ -308,5 +299,5 @@ void connect_delete(Connect_t *con){
     request_delete(con->request);
     free(con->read_buf);
     free(con);
-    con=NULL;
+
 }
