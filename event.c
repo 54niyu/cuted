@@ -23,6 +23,13 @@
 #include <wait.h>
 #include<semaphore.h>
 
+
+#define EV_TIME 1
+#define EV_READ 2
+#define EV_WRITE 8
+#define EV_SIGNAL 16
+
+
 void reator_delete(Reator *rt);
 Timer *tm_create();
 void tm_delete(Timer *);
@@ -71,10 +78,53 @@ void reator_delete(Reator* rt) {
         close(rt->signal_fd[1]);
         free(rt);
     }
-
     return;
 }
 
+int reator_add(Reator* rt,int fd,short event,void (*cb)(void* arg)){
+    if(rt==NULL)   return 0;
+
+    Event_t *ev;
+    ev->type=event;
+
+    switch (event){
+        case EV_SIGNAL:{};break;
+        case EV_TIME:{};break;
+        case EV_READ:{};break;
+        case EV_WRITE:{};break;
+    }
+}
+int reator_ctl(Reator* rt,int fd,short event,void (*cb)(void* arg)){
+
+}
+int reator_del(Reator* rt,int fd,short event,void (*cb)(void* arg)){
+
+}
+
+void reator_loop(Reator* rt){
+
+    while(rt->stop==1) {
+
+        rt->timeout = gettime();
+
+        int ret = epoll_wait(rt->epoll_fd, rt->events, 1024, rt->timeout);
+
+        if (ret < 0) {
+            continue;
+        } else if (ret == 0) {
+            //时间到
+        } else {
+            //处理io事件
+            int i;
+            for (i = 0; i < ret; i++) {
+                Event_t *ev = (Event_t *) (rt->events[i].data.ptr);
+                ev->ev.io.cb_function(ev->ev.io.arg);
+            }
+        }
+
+        //处理定时器
+    }
+}
 
 
 

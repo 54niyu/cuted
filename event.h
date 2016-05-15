@@ -5,7 +5,7 @@
 #ifndef HTTP_EVENT_H
 #define HTTP_EVENT_H
 
-struct event{
+typedef struct event{
     int type;
     //io
     union{
@@ -25,7 +25,7 @@ struct event{
             void *arg;
         } tm;
     } ev;
-};
+} Event_t;
 
 typedef struct timer{
 
@@ -41,6 +41,8 @@ typedef struct reator{
     int signal_fd[2];//信号处理
 
     Timer *timer_list;//定时器
+
+    int timeout;
 
     int stop;//结束标志
 
