@@ -1,22 +1,14 @@
 //
 // Created by think on 16-5-6.
 //
-#include<sys/types.h>
-#include<sys/socket.h>
-#include<netinet/in.h>
-#include<arpa/inet.h>
-#include<assert.h>
-#include<stdio.h>
-#include<unistd.h>
-#include<errno.h>
-#include<string.h>
-#include<signal.h>
-#include<fcntl.h>
-#include<stdlib.h>
+
+
+#ifdef _Linux
 #include<sys/epoll.h>
-#include<pthread.h>
-#include <wait.h>
-#include<semaphore.h>
+#else
+#include<sys/event.h>
+#endif
+
 
 #include "http.h"
 #include "server.h"
@@ -29,12 +21,13 @@ int bind_server(char *addr, int port);//初始化参数，bind服务器
 void main_loop(int serverfd);//主循环
 void signal_handler(int sig);//信号处理函数
 void register_signal();//信号注册
+void addsiggg(int sig);
 void register_event(int epollfd,int fd, unsigned int op, unsigned int e);//事件处理
 Connect_t *connect_create();
 void connect_delete(Connect_t *con);
 
 
-sem_t sem_socket;
+
 int worker=0;
 int workerpid[2]={0};
 int multiprocess=0;
@@ -50,7 +43,7 @@ int main(int argc,char *argv[]){
 
     register_signal();//注册事件处理
 
-    if(sem_init(&sem_socket,1,1)<0) perror("Sem");
+//    if(sem_init(&sem_socket,1,1)<0) perror("Sem");
 
     if(multiprocess==1) {
         //多线程模式
@@ -116,6 +109,7 @@ void handle_configure(){
 
 
 }
+#ifdef _Linux
 void main_loop(int serverfd){
 
     int epollfd=epoll_create1(0);
@@ -228,6 +222,114 @@ void main_loop(int serverfd){
         }
     }
 }
+#else
+
+void main_loop(int serverfd){
+
+    int kq =  kqueue();
+
+    if (kq == -1){
+        perror("Kqueue()");exit(-1);
+    }
+
+    struct kevent events[MAX_EVENT];
+
+    size_t nbytes;
+
+    int error,nev;
+
+    setnonblocking(serverfd);
+
+    struct kevent change;
+
+    EV_SET(&change,serverfd, EVFILT_READ,EV_ADD|EV_ENABLE,0,0,0);
+
+    if (kevent(kq,&change,1,NULL,0,NULL)== -1){
+        perror("EV_ADD");exit(-1);
+    }
+
+    for (;;){
+
+        if(run==0){
+            if(worker==0&&multiprocess==1){
+                write(STDOUT_FILENO,"Kill",4);
+                kill(workerpid[0],15);
+                kill(workerpid[1],15);
+            }
+            printf("%d will stop\n",getpid());
+            break;
+        }
+
+        if ((nev= kevent(kq,NULL,0,events,MAX_EVENT,NULL))==-1){
+            perror("Kevent");
+            continue;
+        }
+
+        for (int i =0;i < nev; i++){
+            int fd = events[i].ident;
+            if (fd == serverfd){
+
+                int client = accept(serverfd,NULL,NULL);
+                if (client < 0) {
+                    perror("Accept");
+                    continue;
+                }
+                printf("process %d get clent %d  ",getpid(),client);
+                setnonblocking(client);
+                struct kevent chg;
+                Connect_t *con=connect_create();
+                con->fd=client;
+
+                EV_SET(&chg,client,EVFILT_READ,EV_ADD|EV_ENABLE,0,0,con);
+                kevent(kq,&chg,1,NULL,0,NULL);
+
+            }else{
+                if (events[i].filter == EVFILT_READ){
+
+                    Connect_t *con = events[i].udata;
+
+                    int len=read(con->fd,con->read_buf,1024);
+                    if(len<=0){
+                        printf("Nothing to read why remind me ???\n");
+                        continue;
+                    }else{
+                        printf("Receive %d bytes\n",len);
+                    }
+                    con->read_buf[len]='\0';
+                    con->request->fd=fd;
+
+                    http_parse(con);
+
+                    struct kevent chg;
+
+                    EV_SET(&chg,fd,EVFILT_WRITE, EV_ADD,0,0,con);
+
+                    kevent(kq,&chg,1,NULL,0,NULL);
+
+                }else if(events[i].filter == EVFILT_WRITE){
+
+                    //处理写事件
+                    response(events[i].udata);
+                    //删除监听事件
+                    connect_delete(events[i].udata);
+
+                    close(fd);//关闭连接
+
+                }else{
+
+                    printf("Something else");
+
+                }
+            }
+        }
+    }
+
+
+
+
+}
+
+#endif
 void signal_handler(int sig){
 
     printf("Caught %s\n",sys_siglist[sig]);
@@ -246,15 +348,17 @@ void signal_handler(int sig){
         };
     }
 }
+
 void register_signal(){
 
-    addsig(SIGCHLD);
-    addsig(SIGABRT);
-    addsig(SIGTERM);
-    addsig(SIGINT);
-    addsig(SIGSEGV);
+    addsiggg(SIGCHLD);
+    addsiggg(SIGABRT);
+    addsiggg(SIGTERM);
+    addsiggg(SIGINT);
+    addsiggg(SIGSEGV);
 }
-void addsig(int sig){
+
+void addsiggg(int sig){
     struct sigaction sa;
     memset(&sa,'\0',sizeof(sa));
     sa.sa_handler=signal_handler;
@@ -263,7 +367,7 @@ void addsig(int sig){
     assert(sigaction(sig,&sa,NULL)!=-1);
 }
 
-
+#ifdef _Linux
 void register_event(int epollfd,int fd, unsigned int op,unsigned int e){
     if(op&EPOLL_CTL_DEL){
         epoll_ctl(epollfd,op,fd,NULL);
@@ -280,6 +384,12 @@ void register_event(int epollfd,int fd, unsigned int op,unsigned int e){
 
     return;
 }
+#else
+
+void register_event(int kfd, int fd, unsigned op, unsigned e){
+
+}
+#endif
 
 int setnonblocking(int fd){
     int old_option=fcntl(fd,F_GETFL);
@@ -291,6 +401,7 @@ int setnonblocking(int fd){
 Connect_t *connect_create(){
     Connect_t * con=(Connect_t*)calloc(1,sizeof(Connect_t));
     con->read_buf=(char*)malloc(2048);
+    con->write_buf=(char*)malloc(10240);
     con->request=request_create();
     return con;
 }
@@ -298,6 +409,7 @@ Connect_t *connect_create(){
 void connect_delete(Connect_t *con){
     request_delete(con->request);
     free(con->read_buf);
+    free(con->write_buf);
     free(con);
 
 }

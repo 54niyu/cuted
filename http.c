@@ -2,12 +2,12 @@
 // Created by think on 16-5-7.
 //
 #include "http.h"
+#include "server.h"
 #include <stdlib.h>
 #include<sys/stat.h>
-#include<sys/sendfile.h>
 #include <fcntl.h>
 
-void http_handle(Request_t *req);
+void http_handle(Connect_t *con);
 Request_t* request_create(){
     Request_t *request=(Request_t *)calloc(1,sizeof(Request_t));
     request->header=(Str_t*)calloc(20,sizeof(Str_t));
@@ -18,8 +18,9 @@ void request_delete(Request_t* request){
     free(request);
 }
 
-Request_t* http_parse(char *content,Request_t *request){
-    char *ptr=content;
+Request_t* http_parse(Connect_t *con){
+    char *ptr=con->read_buf;
+    Request_t *request = con->request;
     if(*ptr=='G'){
        if(strncmp(ptr,"GET",3)==0)
            ptr+=3;
@@ -117,13 +118,16 @@ Request_t* http_parse(char *content,Request_t *request){
        ptr++;request->size++;
     }
 
-    http_handle(request);
+    http_handle(con);
 
 }
-void http_handle(Request_t *req){
+void http_handle(Connect_t *con){
+
+    Request_t *req=con->request;
     char path[256]={'\0'};
-    strncpy(path,"/home/think/html",16);
-    strncpy(path+16,req->uri.str,req->uri.size);
+    char *base="/Users/Bing/AmazeUI-2.7.0";
+    strncpy(path,base, strlen(base));
+    strncpy(path+strlen(base),req->uri.str,req->uri.size);
     //uri初始化路径
 
     int idx=strchr(path,'?');
@@ -154,17 +158,24 @@ void http_handle(Request_t *req){
         return;
     }
 
-    req->file_fd=fd;
+    int nb= read(fd,con->write_buf,10240);
+
+    con->write_buf[nb]='\0';
+    req->file_size=nb;
+
+
     req->stat_code=2;
-    req->file_size=file_state.st_size;
 }
-void response(Request_t *req){
+void response(Connect_t *con){
+
+    Request_t *req=con->request;
 
     switch(req->stat_code){
         case 2:{
             char *s="HTTP/1.1 200 OK\r\n\r\n";
-           write(req->fd,s,strlen(s));
-            sendfile(req->fd,req->file_fd,NULL,req->file_size);
+            write(req->fd,s,strlen(s));
+            //sendfile(req->fd,req->file_fd,NULL,req->file_size);
+            write(req->fd,con->write_buf,req->file_size);
             close(req->file_fd);
         };break;
         case 4:{

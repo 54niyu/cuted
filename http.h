@@ -8,9 +8,24 @@
 #include<string.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <sys/socket.h>
+#include<sys/types.h>
+#include<sys/socket.h>
+#include<netinet/in.h>
+#include<arpa/inet.h>
+#include<assert.h>
+#include<stdio.h>
+#include<unistd.h>
+#include<errno.h>
+#include<string.h>
+#include<signal.h>
+#include<fcntl.h>
+#include<stdlib.h>
 
 #define printStr1(s) write(STDOUT_FILENO,(s)->str,(s)->size);
 #define printStr2(s) write(STDOUT_FILENO,(s).str,(s).size);
+
+
 
 typedef struct Str{
     char *str;
@@ -34,8 +49,16 @@ typedef struct Request{
     int file_size;
 } Request_t;
 
+typedef struct connect_t{
+    int fd;
+    struct sockaddr_in addr;
+    char* read_buf;
+    char* write_buf;
+    Request_t *request;
+} Connect_t;
+
 Request_t* request_create();
 void request_delete(Request_t *req);
-Request_t* http_parse(char* content,Request_t *request);
-void response(Request_t *req);
+Request_t* http_parse(Connect_t* con);
+void response(Connect_t* con);
 #endif //HTTP_HTTP_H
