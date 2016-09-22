@@ -4,9 +4,9 @@
 
 
 #ifdef _Linux
-#include<sys/epoll.h>
+#include <sys/epoll.h>
 #else
-#include<sys/event.h>
+#include <sys/event.h>
 #endif
 
 
@@ -23,9 +23,6 @@ void signal_handler(int sig);//信号处理函数
 void register_signal();//信号注册
 void addsiggg(int sig);
 void register_event(int epollfd,int fd, unsigned int op, unsigned int e);//事件处理
-Connect_t *connect_create();
-void connect_delete(Connect_t *con);
-
 
 
 int worker=0;
@@ -39,7 +36,7 @@ int main(int argc,char *argv[]){
 
     handle_configure();
 
-    int serverfd=bind_server("127.0.0.1",8080);
+    int serverfd=bind_server("127.0.0.1",8081);
 
     register_signal();//注册事件处理
 
@@ -153,7 +150,7 @@ void main_loop(int serverfd){
                             perror("Accept");
                             continue;
                         }
-                        printf("process %d get clent %d  ",getpid(),clientfd);
+                        printf("process %d accept client %d  \n",getpid(),clientfd);
 
                         Connect_t *con=connect_create();
                         con->fd=clientfd;con->addr=client_addr;
@@ -183,9 +180,12 @@ void main_loop(int serverfd){
                     int len=read(con->fd,con->read_buf,1024);
                     if(len<=0){
                         printf("Nothing to read why remind me ???\n");
+                        sleep(100);
+                        break;
                         continue;
                     }else{
-          //              printf("Receive %d bytes\n",len);
+                          printf("Receive: %s\n",con->read_buf);
+                          printf("Receive %d bytes\n",len);
                     }
                     con->read_buf[len]='\0';
                     con->request->fd=sfd;
@@ -238,7 +238,7 @@ void main_loop(int serverfd){
 
     int error,nev;
 
-    setnonblocking(serverfd);
+    //setnonblocking(serverfd);
 
     struct kevent change;
 
@@ -269,12 +269,15 @@ void main_loop(int serverfd){
             int fd = events[i].ident;
             if (fd == serverfd){
 
-                int client = accept(serverfd,NULL,NULL);
+                ssize_t  socklen;
+                struct sockaddr client_addr;
+
+                int client = accept(serverfd,&client_addr,&socklen);
                 if (client < 0) {
                     perror("Accept");
                     continue;
                 }
-                printf("process %d get clent %d  ",getpid(),client);
+                printf("process %d accept client %d  \n",getpid(),client);
                 setnonblocking(client);
                 struct kevent chg;
                 Connect_t *con=connect_create();
@@ -286,14 +289,20 @@ void main_loop(int serverfd){
             }else{
                 if (events[i].filter == EVFILT_READ){
 
+                    printf("reading from %d..\n",fd);
                     Connect_t *con = events[i].udata;
 
                     int len=read(con->fd,con->read_buf,1024);
                     if(len<=0){
-                        printf("Nothing to read why remind me ???\n");
+                        printf("Nothing to read why remind me ???   %d\n",fd);
+                        struct kevent ecv;
+                        EV_SET(&ecv,fd,EVFILT_READ,EV_DISABLE,0,0,con);
+                        kevent(kq,&ecv,1,NULL,0,NULL);
+                    //    sleep(10);
                         continue;
                     }else{
-                        printf("Receive %d bytes\n",len);
+                        printf("Receive %d bytes\n ",len);
+                        printf("%s\n",con->read_buf);
                     }
                     con->read_buf[len]='\0';
                     con->request->fd=fd;
@@ -323,10 +332,6 @@ void main_loop(int serverfd){
             }
         }
     }
-
-
-
-
 }
 
 #endif
@@ -347,6 +352,7 @@ void signal_handler(int sig){
             run=0;
         };
     }
+    exit(0);
 }
 
 void register_signal(){
@@ -398,18 +404,3 @@ int setnonblocking(int fd){
     return old_option;
 }
 
-Connect_t *connect_create(){
-    Connect_t * con=(Connect_t*)calloc(1,sizeof(Connect_t));
-    con->read_buf=(char*)malloc(2048);
-    con->write_buf=(char*)malloc(10240);
-    con->request=request_create();
-    return con;
-}
-
-void connect_delete(Connect_t *con){
-    request_delete(con->request);
-    free(con->read_buf);
-    free(con->write_buf);
-    free(con);
-
-}

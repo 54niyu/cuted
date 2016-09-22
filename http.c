@@ -5,17 +5,33 @@
 #include "server.h"
 #include <stdlib.h>
 #include<sys/stat.h>
+#include <sys/mman.h>
 #include <fcntl.h>
 
+
 void http_handle(Connect_t *con);
+
+
 Request_t* request_create(){
     Request_t *request=(Request_t *)calloc(1,sizeof(Request_t));
     request->header=(Str_t*)calloc(20,sizeof(Str_t));
     return request;
 }
 void request_delete(Request_t* request){
-    if(request->header!=NULL) free(request->header);
+    free(request->header);
     free(request);
+}
+Connect_t *connect_create(){
+    Connect_t * con=(Connect_t*)calloc(1,sizeof(Connect_t));
+    con->read_buf=(char*)malloc(2048);
+    con->write_buf=(char*)malloc(10240);
+    con->request=request_create();
+    return con;
+}
+void connect_delete(Connect_t *con){
+    request_delete(con->request);
+    free(con->read_buf);
+    free(con);
 }
 
 Request_t* http_parse(Connect_t *con){
@@ -44,8 +60,6 @@ Request_t* http_parse(Connect_t *con){
         request->stat_code=4;
         return NULL;
     }
-
-    printf("Methon %d  ",request->method);
 
     while(*ptr==' ')
         ptr++;
@@ -130,19 +144,17 @@ void http_handle(Connect_t *con){
     strncpy(path+strlen(base),req->uri.str,req->uri.size);
     //uri初始化路径
 
-    int idx=strchr(path,'?');
+    char* idx=strchr(path,'?');
     if(idx==0){
  //       printf("no paragram\n");
     }else{
-        path[idx]='\0';
+        *idx='\0';
     }
     int len=strlen(path);
 
     if(path[len-1]=='/'){
         strncat(path,"index.html",10);
     }
-
-//    printf("%s\n",path);
 
     struct stat file_state;
     int ret=stat(path,&file_state);
@@ -158,10 +170,12 @@ void http_handle(Connect_t *con){
         return;
     }
 
-    int nb= read(fd,con->write_buf,10240);
+    void* start=mmap(NULL,file_state.st_size,PROT_READ,MAP_PRIVATE,fd,NULL);
 
-    con->write_buf[nb]='\0';
-    req->file_size=nb;
+    free(con->write_buf);
+    con->write_buf=NULL;
+    con->write_buf=start;
+    req->file_size=file_state.st_size;
 
 
     req->stat_code=2;
@@ -176,7 +190,8 @@ void response(Connect_t *con){
             write(req->fd,s,strlen(s));
             //sendfile(req->fd,req->file_fd,NULL,req->file_size);
             write(req->fd,con->write_buf,req->file_size);
-            close(req->file_fd);
+            munmap(con->write_buf,req->file_size);
+            con->write_buf=NULL;
         };break;
         case 4:{
             char *s="HTTP/1.1 400 BAD REQUEST\r\n\r\n";

@@ -5,47 +5,57 @@
 #ifndef HTTP_EVENT_H
 #define HTTP_EVENT_H
 
-typedef struct event{
-    int type;
-    //io
-    union{
-        struct io{
-            int fd;
-            void (cb_function)(void *arg);
-            void *arg;
-        } io;
-        struct signal{
-            int sig;
-            void (cb_function)(void *arg);
-            void *arg;
-        } sg;
-        struct timer{
-            struct timeval va;
-            void (cb_function)(void *arg);
-            void *arg;
-        } tm;
-    } ev;
-} Event_t;
+#include <time.h>
+//#include "kqueue.c"
 
-typedef struct timer{
+#define CUTE_IO 1
+#define CUTE_SIG 2
+#define CUTE_TM 4
 
+#define CUTE_READ 1
+#define CUTE_WRITE 2
+#define CUTE_SIGNAL 4
+#define CUTE_TIME 8
+#define CUTE_PERSIST 16
+
+typedef struct timer_t{
 
 } Timer;
 
-typedef struct reator{
+typedef struct event{
 
-    int epoll_fd;
+    short type;
+    short flags;
+    int fd;
+    void (*cb_function)(void *arg);
+    void *arg;
+    struct timeval* timeout;
 
-    struct epoll_event *events;
+} event_t;
+
+
+typedef struct reactor{
+
+    struct op_cmd * op;
 
     int signal_fd[2];//信号处理
 
     Timer *timer_list;//定时器
 
-    int timeout;
+    struct timeval* timeout;
 
     int stop;//结束标志
 
-} Reator;
+} Reactor;
+
+event_t *new_event(int fd,short type,short flag,void (*cb)(void *),void *data);
+
+
+Reactor* reactor_create();
+int reactor_add(Reactor* rt,event_t* ev);
+int reactor_del(Reactor* rt,event_t *ev);
+void reactor_loop(Reactor* rt);
+
+
 
 #endif //HTTP_EVENT_H
