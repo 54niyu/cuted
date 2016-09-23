@@ -82,7 +82,7 @@ int del_kevent(struct op_cmd *op,int fd,short op2,void *data) {
 
     struct kevent ev;
 
-    EV_SET(&ev, fd, EVFILT_READ, EV_DISABLE | EV_DELETE, 0, 0, data);
+    EV_SET(&ev, fd, op2 , EV_DISABLE | EV_DELETE, 0, 0, data);
 
     return kevent(op->kq, &ev, 1, NULL, 0, NULL);
 

@@ -62,6 +62,7 @@ void reactor_loop(Reactor* rc){
             for(i=0;i<n;i++){
                 event_t *ev = (event_t*)(rc->op->events[i].udata);
                 ev->cb_function(ev->arg);
+		        reactor_del(rc, ev);
             }
         }
     }
