@@ -12,6 +12,8 @@
 
 #include "http.h"
 #include "server.h"
+#include "event.h"
+#include "event.h"
 
 #define MAX_LISTEN 128
 #define MAX_EVENT 128
@@ -24,6 +26,11 @@ void register_signal();//信号注册
 void addsiggg(int sig);
 void register_event(int epollfd,int fd, unsigned int op, unsigned int e);//事件处理
 
+
+void read_client(int,void*);
+void write_client(int,void*);
+void accept_client(int,void*);
+void main_loop2(int);
 
 int worker=0;
 int workerpid[2]={0};
@@ -59,7 +66,7 @@ int main(int argc,char *argv[]){
         if(worker==0) printf("%d  I get two child %d %d\n", getpid(), workerpid[0], workerpid[1]);
     }
 
-    main_loop(serverfd);//主循环
+    main_loop2(serverfd);//主循环
 
     close(serverfd);
 
@@ -223,115 +230,179 @@ void main_loop(int serverfd){
     }
 }
 #else
+void accept_client(int fd, void *arg){
 
-void main_loop(int serverfd){
+    ssize_t  socklen;
+    struct sockaddr client_addr;
 
-    int kq =  kqueue();
-
-    if (kq == -1){
-        perror("Kqueue()");exit(-1);
+    int client = accept(fd,&client_addr,&socklen);
+    if (client < 0) {
+        perror("Accept");
+        return;
     }
+    printf("process %d accept client %d  \n",getpid(),client);
+    setnonblocking(client);
+    struct kevent chg;
+    Connect_t *con=connect_create();
+    con->fd=client;
 
-    struct kevent events[MAX_EVENT];
 
-    size_t nbytes;
+    event_t *ev = new_event(client,1,CUTE_READ,read_client,con);
+    Reactor* rc = (Reactor*)arg;
+    con->backend = rc;
+    reactor_add(rc,ev);
+}
+void read_client(int fd, void* arg){
 
-    int error,nev;
+    printf("reading from %d..\n",fd);
+    Connect_t *con = arg;
 
-    //setnonblocking(serverfd);
-
-    struct kevent change;
-
-    EV_SET(&change,serverfd, EVFILT_READ,EV_ADD|EV_ENABLE,0,0,0);
-
-    if (kevent(kq,&change,1,NULL,0,NULL)== -1){
-        perror("EV_ADD");exit(-1);
+    int len=read(con->fd,con->read_buf,1024);
+    if(len<=0){
+        printf("Nothing to read why remind me ???   %d\n",fd);
+        return;
+    }else{
+        printf("Receive %d bytes\n ",len);
+        printf("%s\n",con->read_buf);
     }
+    con->read_buf[len]='\0';
+    con->request->fd=fd;
 
-    for (;;){
+    http_parse(con);
 
-        if(run==0){
-            if(worker==0&&multiprocess==1){
-                write(STDOUT_FILENO,"Kill",4);
-                kill(workerpid[0],15);
-                kill(workerpid[1],15);
-            }
-            printf("%d will stop\n",getpid());
-            break;
-        }
+    event_t *ev = new_event(fd,1,CUTE_WRITE,write_client,con);
+    reactor_add((Reactor*)con->backend,ev);
+}
 
-        if ((nev= kevent(kq,NULL,0,events,MAX_EVENT,NULL))==-1){
-            perror("Kevent");
-            continue;
-        }
+void write_client(int fd, void* arg){
 
-        for (int i =0;i < nev; i++){
-            int fd = events[i].ident;
-            if (fd == serverfd){
+    //处理写事件
+    response(arg);
+    //删除监听事件
+    connect_delete(arg);
 
-                ssize_t  socklen;
-                struct sockaddr client_addr;
+    close(fd);//关闭连接
+}
 
-                int client = accept(serverfd,&client_addr,&socklen);
-                if (client < 0) {
-                    perror("Accept");
-                    continue;
-                }
-                printf("process %d accept client %d  \n",getpid(),client);
-                setnonblocking(client);
-                struct kevent chg;
-                Connect_t *con=connect_create();
-                con->fd=client;
+void main_loop2(int server_fd){
 
-                EV_SET(&chg,client,EVFILT_READ,EV_ADD|EV_ENABLE,0,0,con);
-                kevent(kq,&chg,1,NULL,0,NULL);
+    Reactor *rc = reactor_create();
+    event_t* sev = new_event(server_fd,1,CUTE_READ|CUTE_PERSIST,accept_client,rc);
 
-            }else{
-                if (events[i].filter == EVFILT_READ){
+    reactor_add(rc,sev);
 
-                    printf("reading from %d..\n",fd);
-                    Connect_t *con = events[i].udata;
+    reactor_loop(rc);
 
-                    int len=read(con->fd,con->read_buf,1024);
-                    if(len<=0){
-                        printf("Nothing to read why remind me ???   %d\n",fd);
-                        struct kevent ecv;
-                        EV_SET(&ecv,fd,EVFILT_READ,EV_DISABLE,0,0,con);
-                        kevent(kq,&ecv,1,NULL,0,NULL);
-                    //    sleep(10);
-                        continue;
-                    }else{
-                        printf("Receive %d bytes\n ",len);
-                        printf("%s\n",con->read_buf);
-                    }
-                    con->read_buf[len]='\0';
-                    con->request->fd=fd;
+}
 
-                    http_parse(con);
+// void main_loop(int serverfd){
 
-                    struct kevent chg;
+//     int kq =  kqueue();
 
-                    EV_SET(&chg,fd,EVFILT_WRITE, EV_ADD,0,0,con);
+//     if (kq == -1){
+//         perror("Kqueue()");exit(-1);
+//     }
 
-                    kevent(kq,&chg,1,NULL,0,NULL);
+//     struct kevent events[MAX_EVENT];
 
-                }else if(events[i].filter == EVFILT_WRITE){
+//     size_t nbytes;
 
-                    //处理写事件
-                    response(events[i].udata);
-                    //删除监听事件
-                    connect_delete(events[i].udata);
+//     int error,nev;
 
-                    close(fd);//关闭连接
+//     //setnonblocking(serverfd);
 
-                }else{
+//     struct kevent change;
 
-                    printf("Something else");
+//     EV_SET(&change,serverfd, EVFILT_READ,EV_ADD|EV_ENABLE,0,0,0);
 
-                }
-            }
-        }
-    }
+//     if (kevent(kq,&change,1,NULL,0,NULL)== -1){
+//         perror("EV_ADD");exit(-1);
+//     }
+
+//     for (;;){
+
+//         if(run==0){
+//             if(worker==0&&multiprocess==1){
+//                 write(STDOUT_FILENO,"Kill",4);
+//                 kill(workerpid[0],15);
+//                 kill(workerpid[1],15);
+//             }
+//             printf("%d will stop\n",getpid());
+//             break;
+//         }
+
+//         if ((nev= kevent(kq,NULL,0,events,MAX_EVENT,NULL))==-1){
+//             perror("Kevent");
+//             continue;
+//         }
+
+//         for (int i =0;i < nev; i++){
+//             int fd = events[i].ident;
+//             if (fd == serverfd){
+
+//                 ssize_t  socklen;
+//                 struct sockaddr client_addr;
+
+//                 int client = accept(serverfd,&client_addr,&socklen);
+//                 if (client < 0) {
+//                     perror("Accept");
+//                     continue;
+//                 }
+//                 printf("process %d accept client %d  \n",getpid(),client);
+//                 setnonblocking(client);
+//                 struct kevent chg;
+//                 Connect_t *con=connect_create();
+//                 con->fd=client;
+
+//                 EV_SET(&chg,client,EVFILT_READ,EV_ADD|EV_ENABLE,0,0,con);
+//                 kevent(kq,&chg,1,NULL,0,NULL);
+
+//             }else{
+//                 if (events[i].filter == EVFILT_READ){
+
+//                     printf("reading from %d..\n",fd);
+//                     Connect_t *con = events[i].udata;
+
+//                     int len=read(con->fd,con->read_buf,1024);
+//                     if(len<=0){
+//                         printf("Nothing to read why remind me ???   %d\n",fd);
+//                         struct kevent ecv;
+//                         EV_SET(&ecv,fd,EVFILT_READ,EV_DISABLE,0,0,con);
+//                         kevent(kq,&ecv,1,NULL,0,NULL);
+//                     //    sleep(10);
+//                         continue;
+//                     }else{
+//                         printf("Receive %d bytes\n ",len);
+//                         printf("%s\n",con->read_buf);
+//                     }
+//                     con->read_buf[len]='\0';
+//                     con->request->fd=fd;
+
+//                     http_parse(con);
+
+//                     struct kevent chg;
+
+//                     EV_SET(&chg,fd,EVFILT_WRITE, EV_ADD,0,0,con);
+
+//                     kevent(kq,&chg,1,NULL,0,NULL);
+
+//                 }else if(events[i].filter == EVFILT_WRITE){
+
+//                     //处理写事件
+//                     response(events[i].udata);
+//                     //删除监听事件
+//                     connect_delete(events[i].udata);
+
+//                     close(fd);//关闭连接
+
+//                 }else{
+
+//                     printf("Something else");
+
+//                 }
+//             }
+//         }
+//     }
 }
 
 #endif

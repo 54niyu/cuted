@@ -54,6 +54,7 @@ typedef struct connect_t{
     char* read_buf;
     char* write_buf;
     Request_t *request;
+    void* backend;
 } Connect_t;
 
 Request_t* request_create();

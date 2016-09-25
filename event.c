@@ -3,7 +3,7 @@
 #include"kqueue.c"
 
 
-event_t *new_event(int fd, short type, short flag, void (*cb)(void *), void *data){
+event_t *new_event(int fd, short type, short flag, void (*cb)(int,void *), void *data){
 
 	event_t *ev = (event_t*)malloc(sizeof(event_t));
 	if(ev == NULL){
@@ -25,7 +25,9 @@ Reactor* reactor_create(){
 	Reactor* rc = (Reactor*)malloc(sizeof(Reactor));
 	if(rc == NULL)	return NULL;
 
-	rc->op = create_kqueue();
+	rc->op = kq_ops.create(); // create_kqueue();
+    rc->func_back = &kq_ops;
+    rc->data_back = rc->func_back->create();
 
     rc->stop = 0;
 
@@ -38,7 +40,7 @@ int reactor_add(Reactor* rc, event_t* ev){
        return 1;
     }
 
-    return add_kevent(rc->op, ev->fd, ev->flags, ev);
+    return rc->func_back->add(rc->data_back, ev->fd, ev->flags, ev);
 }
 
 int reactor_del(Reactor* rc, event_t* ev){
@@ -47,8 +49,13 @@ int reactor_del(Reactor* rc, event_t* ev){
         return 1;
     }
 
-    return del_kevent(rc->op,ev->fd,ev->flags,ev);
+    return rc->func_back->del(rc->data_back,ev->fd,ev->flags,ev);
 
+}
+
+void reactor_exit(Reactor *rc){
+
+    rc->stop = 1;
 }
 
 void reactor_loop(Reactor* rc){
@@ -57,19 +64,15 @@ void reactor_loop(Reactor* rc){
 
         int n;
         int i;
-        if((n = kevent_dispath(rc->op,NULL))!= -1){
-
-            for(i=0;i<n;i++){
-                event_t *ev = (event_t*)(rc->op->events[i].udata);
-                ev->cb_function(ev->arg);
-		        reactor_del(rc, ev);
-            }
+        if((n = (rc->func_back->dispatch)(rc->data_back,NULL))!= -1){
+//
+//            for(i=0;i<n;i++){
+//                event_t *ev = (event_t*)(rc->data_back->events[i].udata);
+//                ev->cb_function(ev->arg);
+//		        reactor_del(rc, ev);
+//            }
         }
+       // reactor_exit(rc);
     }
-}
-
-void reactor_exit(Reactor *rc){
-
-    rc->stop = 1;
 }
 
