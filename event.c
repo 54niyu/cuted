@@ -1,7 +1,7 @@
 #include"event.h"
 #include<stdlib.h>
-#include"kqueue.c"
 
+extern struct back_op kq_op_func;
 
 event_t *new_event(int fd, short type, short flag, void (*cb)(int,void *), void *data){
 
@@ -22,13 +22,11 @@ event_t *new_event(int fd, short type, short flag, void (*cb)(int,void *), void 
 
 Reactor* reactor_create(){
 
-	Reactor* rc = (Reactor*)malloc(sizeof(Reactor));
+	struct reactor* rc = (struct reactor*)malloc(sizeof(struct reactor));
 	if(rc == NULL)	return NULL;
 
-	rc->op = kq_ops.create(); // create_kqueue();
-    rc->func_back = &kq_ops;
-    rc->data_back = rc->func_back->create();
-
+    rc->func_back = &kq_op_func;
+    rc->func_back->init(rc);
     rc->stop = 0;
 
     return rc;
@@ -40,7 +38,7 @@ int reactor_add(Reactor* rc, event_t* ev){
        return 1;
     }
 
-    return rc->func_back->add(rc->data_back, ev->fd, ev->flags, ev);
+    return rc->func_back->add(rc, ev->fd, ev->flags, ev);
 }
 
 int reactor_del(Reactor* rc, event_t* ev){
@@ -49,7 +47,7 @@ int reactor_del(Reactor* rc, event_t* ev){
         return 1;
     }
 
-    return rc->func_back->del(rc->data_back,ev->fd,ev->flags,ev);
+    return rc->func_back->del(rc,ev->fd,ev->flags,ev);
 
 }
 
@@ -62,17 +60,7 @@ void reactor_loop(Reactor* rc){
 
     while(!rc->stop){
 
-        int n;
-        int i;
-        if((n = (rc->func_back->dispatch)(rc->data_back,NULL))!= -1){
-//
-//            for(i=0;i<n;i++){
-//                event_t *ev = (event_t*)(rc->data_back->events[i].udata);
-//                ev->cb_function(ev->arg);
-//		        reactor_del(rc, ev);
-//            }
-        }
-       // reactor_exit(rc);
+        rc->func_back->dispatch(rc, NULL);
     }
 }
 

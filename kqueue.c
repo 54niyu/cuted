@@ -6,28 +6,25 @@
 #include <sys/event.h>
 #include <stdio.h>
 #include "event.h"
-#include "server.h"
 
 #define NEVENT 64
 
+int kq_init(struct reactor* rc);
+int kq_add(struct reactor *rc,int fd, short op, void *data);
+int kq_del(struct reactor *rc,int fd, short op, void *data);
+int kq_dispatch(struct reactor *rc, struct timeval *tm);
+int kq_free(struct reactor *rc);
 
-void* create_kqueue();
-int add_kevent(void *op,int fd,short op2,void *data);
-int del_kevent(void *op,int fd,short op2,void *data);
-int kevent_dispath(void *op,struct timeval *tm);
-
-
-struct back_ops kq_ops={
+struct back_op kq_op_func= {
         "kqueue",
-        create_kqueue,
-        add_kevent,
-        del_kevent,
-        NULL,
-        kevent_dispath,
-        NULL,
+        kq_init,
+        kq_add,
+        kq_del,
+        kq_dispatch,
+        kq_free,
 };
 
-struct op_cmd {
+struct kq_op_data {
     int kq;
     struct kevent *events;
     int events_size;
@@ -36,103 +33,107 @@ struct op_cmd {
     int changes_size;
 };
 
-void* create_kqueue(){
 
-    struct op_cmd *op = (struct op_cmd*)malloc(sizeof(struct op_cmd));
+int kq_init(struct reactor *rc){
+
+    struct kq_op_data *op = (struct kq_op_data*)malloc(sizeof(struct kq_op_data));
 
     if( op == NULL) {
-      return NULL;
+        printf("kqueue malloc error\n");
+        return -1;
     }
 
     int kq = kqueue();
     if(kq == -1){
         printf("kqueue error\n");
         free(op);
-        return NULL;
+        return -1;
     }
 
     op->kq = kq;
+    rc->data_back = op;
 
     struct kevent *events = (struct kevent *)malloc(sizeof(struct kevent)*NEVENT);
 
     if(events == NULL){
         free(op);
-        return NULL;
+        return -1;
     }
 
     op->events = events;
     op->events_size = NEVENT;
 
-
     struct kevent *changes = (struct kevent *)malloc(sizeof(struct kevent)*NEVENT);
 
     if(changes == NULL){
         free(op);
-        return NULL;
+        return -1;
     }
 
     op->changes = changes;
     op->changes_size = NEVENT;
 
-    return op;
+    return 0;
 }
 
-int add_kevent(void *back,int fd,short op2,void *data){
+int kq_add(struct reactor *rc,int fd,short op,void *data){
 
-    if(back == NULL)	return -1;
-    struct op_cmd* op = (struct op_cmd*)back;
+    if(rc == NULL)	return -1;
+    struct kq_op_data *op_data = (struct kq_op_data*)rc->data_back;
 
 	struct kevent ev;
 
-	if ((op2 & CUTE_READ)){
+	if ((op & CUTE_READ)){
 		EV_SET(&ev,fd,EVFILT_READ,EV_ADD|EV_ENABLE,0,0,data);
 	}
-	if ( op2 & CUTE_WRITE){
+	if ( op & CUTE_WRITE){
 		EV_SET(&ev,fd,EVFILT_WRITE,EV_ADD|EV_ENABLE,0,0,data);
 	}
 
-	return kevent(op->kq, &ev, 1, NULL, 0, NULL);
+	return kevent(op_data->kq, &ev, 1, NULL, 0, NULL);
 }
 
-int del_kevent(void *back,int fd,short op2,void *data) {
+int kq_del(struct reactor *rc,int fd,short op,void *data) {
 
-    if (back == NULL) return -1;
-    struct op_cmd* op = (struct op_cmd*)back;
-
+    if (rc == NULL) return -1;
+    struct kq_op_data* op_data = (struct kq_op_data*)rc->data_back;
 
     struct kevent ev;
 
-	if ((op2 & CUTE_READ)){
+	if ((op & CUTE_READ)){
 		EV_SET(&ev,fd,EVFILT_READ,EV_DISABLE|EV_DELETE, 0,0,data);
 	}
-	if ( op2 & CUTE_WRITE){
+	if (op & CUTE_WRITE){
 		EV_SET(&ev,fd,EVFILT_WRITE,EV_DISABLE|EV_DELETE, 0,0,data);
 	}
 
-    return kevent(op->kq, &ev, 1, NULL, 0, NULL);
+    return kevent(op_data->kq, &ev, 1, NULL, 0, NULL);
 
 }
 
-int kevent_dispath(void *back,struct timeval *tm){
+int kq_dispatch(struct reactor *rc,struct timeval *tm){
 
-    if(back == NULL)  return -1;
-    struct op_cmd* op = (struct op_cmd*)back;
+    if(rc == NULL)  return -1;
+    struct kq_op_data *op_data = (struct kq_op_data*)rc->data_back;
 
     int n=0;
-    if ((n=kevent(op->kq,NULL,0,op->events,op->events_size,NULL)) == -1){
+    if ((n=kevent(op_data->kq,NULL,0,op_data->events,op_data->events_size,NULL)) == -1){
         perror("Kevent dispath");
         exit(-1);
     }else{
-
         int i=0;
         for(i=0;i<n;i++){
-            event_t *ev = (event_t*)(op->events[i].udata);
+            event_t *ev = (event_t*)(op_data->events[i].udata);
             ev->cb_function(ev->fd,ev->arg);
             if(!(ev->flags & CUTE_PERSIST)){
-               del_kevent(op,ev->fd,ev->flags,ev->arg);
+               kq_del(op_data,ev->fd,ev->flags,ev->arg);
             }
         }
-
     }
     return n;
+}
+
+int kq_free(struct reactor *rc){
+    printf("Free kqueue backend \n");
+    return 0;
 }

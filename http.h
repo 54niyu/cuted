@@ -38,7 +38,7 @@ typedef struct Request{
     Str_t version;
     Str_t* header;
     size_t size;
-    Str_t* parametar;
+    Str_t *parametar;
     Str_t psize;
     Str_t body;
 

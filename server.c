@@ -9,10 +9,8 @@
 #include <sys/event.h>
 #endif
 
-
 #include "http.h"
 #include "server.h"
-#include "event.h"
 #include "event.h"
 
 #define MAX_LISTEN 128
@@ -24,32 +22,36 @@ void main_loop(int serverfd);//主循环
 void signal_handler(int sig);//信号处理函数
 void register_signal();//信号注册
 void addsiggg(int sig);
-void register_event(int epollfd,int fd, unsigned int op, unsigned int e);//事件处理
+
+void register_event(int epollfd, int fd, unsigned int op, unsigned int e);//事件处理
 
 
-void read_client(int,void*);
-void write_client(int,void*);
-void accept_client(int,void*);
+void read_client(int, void *);
+
+void write_client(int, void *);
+
+void accept_client(int, void *);
+
 void main_loop2(int);
 
-int worker=0;
-int workerpid[2]={0};
-int multiprocess=0;
-int num_of_process=2;
-int run=1;
+int worker = 0;
+int workerpid[2] = {0};
+int multiprocess = 0;
+int num_of_process = 2;
+int run = 1;
 
 
-int main(int argc,char *argv[]){
+int main(int argc, char *argv[]) {
 
     handle_configure();
 
-    int serverfd=bind_server("127.0.0.1",8081);
+    int serverfd = bind_server("127.0.0.1", 8081);
 
     register_signal();//注册事件处理
 
 //    if(sem_init(&sem_socket,1,1)<0) perror("Sem");
 
-    if(multiprocess==1) {
+    if (multiprocess == 1) {
         //多线程模式
         int i = 0;
         for (; i < 2; i++) {
@@ -63,7 +65,7 @@ int main(int argc,char *argv[]){
                 workerpid[i] = pid;
             }
         }
-        if(worker==0) printf("%d  I get two child %d %d\n", getpid(), workerpid[0], workerpid[1]);
+        if (worker == 0) printf("%d  I get two child %d %d\n", getpid(), workerpid[0], workerpid[1]);
     }
 
     main_loop2(serverfd);//主循环
@@ -73,46 +75,47 @@ int main(int argc,char *argv[]){
     return 0;
 }
 
-int bind_server(char *addr, int port){
+int bind_server(char *addr, int port) {
 
-    int server_fd=0;
+    int server_fd = 0;
     struct sockaddr_in server_addr;
-    bzero(&server_addr,sizeof(server_addr));
-    server_addr.sin_family=AF_INET;
-    server_addr.sin_addr.s_addr=htonl(INADDR_ANY);
+    bzero(&server_addr, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     //inet_pton(AF_INET,addr,&server_addr.sin_addr);
-    server_addr.sin_port=htons(port);
+    server_addr.sin_port = htons(port);
 
-    server_fd=socket(PF_INET,SOCK_STREAM,0);
-    int reuse=1;
-    setsockopt(server_fd,SOL_SOCKET,SO_REUSEADDR,&reuse,sizeof(reuse));
+    server_fd = socket(PF_INET, SOCK_STREAM, 0);
+    int reuse = 1;
+    setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
 
-    if(server_fd<=0){
+    if (server_fd <= 0) {
         perror("Socket:");
         return 1;
     }
 
-    int ret=0;
-    ret=bind(server_fd,(struct sockaddr *)&server_addr,sizeof(server_addr));
-    if(ret<0){
+    int ret = 0;
+    ret = bind(server_fd, (struct sockaddr *) &server_addr, sizeof(server_addr));
+    if (ret < 0) {
         perror("Bind:");
         return 2;
     }
 
-    ret=listen(server_fd,MAX_LISTEN);
-    if(ret<0){
+    ret = listen(server_fd, MAX_LISTEN);
+    if (ret < 0) {
         perror("Listen:");
         return 3;
     }
 
-    printf("--------Server is listening on %s %d  => pid:%d  listening on fd:%d\n",addr,port,getpid(),server_fd);
+    printf("--------Server is listening on %s %d  => pid:%d  listening on fd:%d\n", addr, port, getpid(), server_fd);
     return server_fd;
 }
 
-void handle_configure(){
+void handle_configure() {
 
 
 }
+
 #ifdef _Linux
 void main_loop(int serverfd){
 
@@ -230,51 +233,53 @@ void main_loop(int serverfd){
     }
 }
 #else
-void accept_client(int fd, void *arg){
 
-    ssize_t  socklen;
+void accept_client(int fd, void *arg) {
+
+    ssize_t socklen;
     struct sockaddr client_addr;
 
-    int client = accept(fd,&client_addr,&socklen);
+    int client = accept(fd, &client_addr, &socklen);
     if (client < 0) {
         perror("Accept");
         return;
     }
-    printf("process %d accept client %d  \n",getpid(),client);
+    printf("process %d accept client %d  \n", getpid(), client);
     setnonblocking(client);
     struct kevent chg;
-    Connect_t *con=connect_create();
-    con->fd=client;
+    Connect_t *con = connect_create();
+    con->fd = client;
 
 
-    event_t *ev = new_event(client,1,CUTE_READ,read_client,con);
-    Reactor* rc = (Reactor*)arg;
+    event_t *ev = new_event(client, 1, CUTE_READ, read_client, con);
+    Reactor *rc = (Reactor *) arg;
     con->backend = rc;
-    reactor_add(rc,ev);
+    reactor_add(rc, ev);
 }
-void read_client(int fd, void* arg){
 
-    printf("reading from %d..\n",fd);
+void read_client(int fd, void *arg) {
+
+    printf("reading from %d..\n", fd);
     Connect_t *con = arg;
 
-    int len=read(con->fd,con->read_buf,1024);
-    if(len<=0){
-        printf("Nothing to read why remind me ???   %d\n",fd);
+    int len = read(con->fd, con->read_buf, 1024);
+    if (len <= 0) {
+        printf("Nothing to read why remind me ???   %d\n", fd);
         return;
-    }else{
-        printf("Receive %d bytes\n ",len);
-        printf("%s\n",con->read_buf);
+    } else {
+        printf("Receive %d bytes\n ", len);
+        printf("%s\n", con->read_buf);
     }
-    con->read_buf[len]='\0';
-    con->request->fd=fd;
+    con->read_buf[len] = '\0';
+    con->request->fd = fd;
 
     http_parse(con);
 
-    event_t *ev = new_event(fd,1,CUTE_WRITE,write_client,con);
-    reactor_add((Reactor*)con->backend,ev);
+    event_t *ev = new_event(fd, 1, CUTE_WRITE, write_client, con);
+    reactor_add((Reactor *) con->backend, ev);
 }
 
-void write_client(int fd, void* arg){
+void write_client(int fd, void *arg) {
 
     //处理写事件
     response(arg);
@@ -284,12 +289,12 @@ void write_client(int fd, void* arg){
     close(fd);//关闭连接
 }
 
-void main_loop2(int server_fd){
+void main_loop2(int server_fd) {
 
     Reactor *rc = reactor_create();
-    event_t* sev = new_event(server_fd,1,CUTE_READ|CUTE_PERSIST,accept_client,rc);
+    event_t *sev = new_event(server_fd, 1, CUTE_READ | CUTE_PERSIST, accept_client, rc);
 
-    reactor_add(rc,sev);
+    reactor_add(rc, sev);
 
     reactor_loop(rc);
 
@@ -403,30 +408,32 @@ void main_loop2(int server_fd){
 //             }
 //         }
 //     }
-}
+//}
 
 #endif
-void signal_handler(int sig){
 
-    printf("Caught %s\n",sys_siglist[sig]);
+void signal_handler(int sig) {
 
-    switch (sig){
-        case SIGCHLD:{
+    printf("Caught %s\n", sys_siglist[sig]);
+
+    switch (sig) {
+        case SIGCHLD: {
             int s;
-            int pid=wait(&s);
-            printf("Child %d exit\n",pid);
+            int pid = wait(&s);
+            printf("Child %d exit\n", pid);
 
-        };break;
+        };
+            break;
         case SIGTERM:
         case SIGINT:
-        case SIGSEGV:{
-            run=0;
+        case SIGSEGV: {
+            run = 0;
         };
     }
     exit(0);
 }
 
-void register_signal(){
+void register_signal() {
 
     addsiggg(SIGCHLD);
     addsiggg(SIGABRT);
@@ -435,13 +442,13 @@ void register_signal(){
     addsiggg(SIGSEGV);
 }
 
-void addsiggg(int sig){
+void addsiggg(int sig) {
     struct sigaction sa;
-    memset(&sa,'\0',sizeof(sa));
-    sa.sa_handler=signal_handler;
-    sa.sa_flags|=SA_RESTART;
+    memset(&sa, '\0', sizeof(sa));
+    sa.sa_handler = signal_handler;
+    sa.sa_flags |= SA_RESTART;
     sigfillset(&sa.sa_mask);
-    assert(sigaction(sig,&sa,NULL)!=-1);
+    assert(sigaction(sig, &sa, NULL) != -1);
 }
 
 #ifdef _Linux
@@ -463,15 +470,16 @@ void register_event(int epollfd,int fd, unsigned int op,unsigned int e){
 }
 #else
 
-void register_event(int kfd, int fd, unsigned op, unsigned e){
+void register_event(int kfd, int fd, unsigned op, unsigned e) {
 
 }
+
 #endif
 
-int setnonblocking(int fd){
-    int old_option=fcntl(fd,F_GETFL);
-    int new_option=old_option|O_NONBLOCK;
-    fcntl(fd,F_SETFL,new_option);
+int setnonblocking(int fd) {
+    int old_option = fcntl(fd, F_GETFL);
+    int new_option = old_option | O_NONBLOCK;
+    fcntl(fd, F_SETFL, new_option);
     return old_option;
 }
 
