@@ -1,7 +1,15 @@
 #include"event.h"
 #include<stdlib.h>
 
+//#define _Linux
+
+#ifdef _Linux
+extern struct back_op ep_op_func;
+struct back_op *op_func = &ep_op_func;
+#else
 extern struct back_op kq_op_func;
+struct back_op *op_func = &kq_op_func;
+#endif
 
 event_t *new_event(int fd, short type, short flag, void (*cb)(int,void *), void *data){
 
@@ -25,7 +33,7 @@ Reactor* reactor_create(){
 	struct reactor* rc = (struct reactor*)malloc(sizeof(struct reactor));
 	if(rc == NULL)	return NULL;
 
-    rc->func_back = &kq_op_func;
+    rc->func_back = op_func;
     rc->func_back->init(rc);
     rc->stop = 0;
 

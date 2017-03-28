@@ -148,7 +148,7 @@ void http_handle(Connect_t *con) {
 
     Request_t *req = con->request;
     char path[256] = {'\0'};
-    char *base = "/Users/Bing/Downloads/AmazeUI-2.7.2";
+    char *base = "/vagrant/Downloads/AmazeUI-2.7.2";
     strncpy(path, base, strlen(base));
     strncpy(path + strlen(base), req->uri.str, req->uri.size);
     //uri初始化路径

@@ -14,7 +14,7 @@
 #define CUTE_READ 1
 #define CUTE_WRITE 2
 #define CUTE_SIGNAL 4
-#define CUTE_TIME 8
+#define CUTE_TIMEOUT 8
 #define CUTE_PERSIST 16
 
 typedef struct timer_t {

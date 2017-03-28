@@ -31,6 +31,7 @@ typedef struct Str{
     size_t  size;
 } Str_t;
 
+
 typedef struct Request{
     int fd;
     int method;

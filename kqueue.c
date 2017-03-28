@@ -66,6 +66,7 @@ int kq_init(struct reactor *rc){
     struct kevent *changes = (struct kevent *)malloc(sizeof(struct kevent)*NEVENT);
 
     if(changes == NULL){
+        free(op->events);
         free(op);
         return -1;
     }
@@ -81,16 +82,25 @@ int kq_add(struct reactor *rc,int fd,short op,void *data){
     if(rc == NULL)	return -1;
     struct kq_op_data *op_data = (struct kq_op_data*)rc->data_back;
 
-	struct kevent ev;
-
+    short flag = 0;
 	if ((op & CUTE_READ)){
-		EV_SET(&ev,fd,EVFILT_READ,EV_ADD|EV_ENABLE,0,0,data);
+        flag |= EVFILT_READ;
 	}
 	if ( op & CUTE_WRITE){
-		EV_SET(&ev,fd,EVFILT_WRITE,EV_ADD|EV_ENABLE,0,0,data);
+        flag |= EVFILT_WRITE;
 	}
+    if ( op &CUTE_SIGNAL){
+        flag |= EVFILT_SIGNAL;
+    }
 
-	return kevent(op_data->kq, &ev, 1, NULL, 0, NULL);
+    // one shot
+    if (op & CUTE_PERSIST){
+        EV_SET(op_data->changes, fd, flag, EV_ADD, 0, 0, data);
+    }else{
+        EV_SET(op_data->changes, fd, flag, EV_ADD|EV_ONESHOT, 0, 0, data);
+    }
+
+	return kevent(op_data->kq, op_data->changes, 1, NULL, 0, NULL);
 }
 
 int kq_del(struct reactor *rc,int fd,short op,void *data) {
@@ -98,16 +108,20 @@ int kq_del(struct reactor *rc,int fd,short op,void *data) {
     if (rc == NULL) return -1;
     struct kq_op_data* op_data = (struct kq_op_data*)rc->data_back;
 
-    struct kevent ev;
+    short flag = 0;
 
 	if ((op & CUTE_READ)){
-		EV_SET(&ev,fd,EVFILT_READ,EV_DISABLE|EV_DELETE, 0,0,data);
+        flag |= EVFILT_READ;
 	}
 	if (op & CUTE_WRITE){
-		EV_SET(&ev,fd,EVFILT_WRITE,EV_DISABLE|EV_DELETE, 0,0,data);
+        flag |= EVFILT_WRITE;
 	}
+    if (op & CUTE_SIGNAL){
+        flag |= EVFILT_SIGNAL;
+    }
 
-    return kevent(op_data->kq, &ev, 1, NULL, 0, NULL);
+    EV_SET(op_data->changes,fd,flag,EV_DISABLE|EV_DELETE, 0,0,data);
+    return kevent(op_data->kq, op_data->changes, 1, NULL, 0, NULL);
 
 }
 
@@ -124,9 +138,10 @@ int kq_dispatch(struct reactor *rc,struct timeval *tm){
         int i=0;
         for(i=0;i<n;i++){
             event_t *ev = (event_t*)(op_data->events[i].udata);
-            ev->cb_function(ev->fd,ev->arg);
-            if(!(ev->flags & CUTE_PERSIST)){
-               kq_del(op_data,ev->fd,ev->flags,ev->arg);
+            if (op_data->events[i].flags & EV_EOF){
+                printf("EOG %d %s",ev->fd, op_data->events[i].fflags);
+            }else{
+                ev->cb_function(ev->fd,ev->arg);
             }
         }
     }
@@ -134,6 +149,25 @@ int kq_dispatch(struct reactor *rc,struct timeval *tm){
 }
 
 int kq_free(struct reactor *rc){
+    struct kq_op_data *op_data = rc->data_back;
+
+    free(op_data->events);
+    free(op_data->changes);
+    free(op_data);
+
     printf("Free kqueue backend \n");
     return 0;
+}
+
+
+int sg_init(struct reactor *rc){
+
+}
+
+int sg_add(struct reactor *rc){
+
+}
+
+int sg_del(struct reactor *rc){
+
 }

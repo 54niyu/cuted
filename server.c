@@ -1,7 +1,9 @@
 //
 // Created by think on 16-5-6.
 //
+//
 
+//#define _Linux
 
 #ifdef _Linux
 #include <sys/epoll.h>
@@ -13,8 +15,10 @@
 #include "server.h"
 #include "event.h"
 
+
 #define MAX_LISTEN 128
 #define MAX_EVENT 128
+
 
 void handle_configure();//配置处理
 int bind_server(char *addr, int port);//初始化参数，bind服务器
@@ -45,7 +49,7 @@ int main(int argc, char *argv[]) {
 
     handle_configure();
 
-    int serverfd = bind_server("127.0.0.1", 8081);
+    int serverfd = bind_server("127.0.0.1", 9901);
 
     register_signal();//注册事件处理
 
@@ -115,124 +119,124 @@ void handle_configure() {
 
 
 }
-
-#ifdef _Linux
-void main_loop(int serverfd){
-
-    int epollfd=epoll_create1(0);
-
-    register_event(epollfd,serverfd,EPOLL_CTL_ADD,EPOLLIN);
-
-    struct epoll_event events[MAX_EVENT];
-    int number=0;
-    int ret=0;
-
-    while(1){
-
-        if(run==0){
-            if(worker==0&&multiprocess==1){
-                write(STDOUT_FILENO,"Kill",4);
-                kill(workerpid[0],15);
-                kill(workerpid[1],15);
-            }
-            printf("%d will stop\n",getpid());
-            break;
-        }
-
-        ret=epoll_wait(epollfd,&events,MAX_EVENT,-1);
-        if(ret<0){
-            perror("Epoll_wait");
-            continue;
-        }
-
-        int i=0;
-        for(;i<ret;i++){
-           int sfd=((Connect_t*)events[i].data.ptr)->fd;
-            if(sfd==serverfd){
-
-                if(events[i].events&EPOLLIN){
-               //     sem_wait(&sem_socket);
-                    if(number<MAX_EVENT) {
-                        struct sockaddr_in client_addr;
-                        socklen_t len = sizeof(client_addr);
-                        int clientfd = accept(serverfd, (struct sockaddr *) &client_addr, &len);
-                        if (clientfd < 0) {
-                            perror("Accept");
-                            continue;
-                        }
-                        printf("process %d accept client %d  \n",getpid(),clientfd);
-
-                        Connect_t *con=connect_create();
-                        con->fd=clientfd;con->addr=client_addr;
-
-
-                        struct epoll_event ev;
-                        bzero(&ev,sizeof(ev));
-                        ev.data.ptr=con;
-                        ev.events=EPOLLIN|EPOLLET;
-
-                        if(epoll_ctl(epollfd,EPOLL_CTL_ADD,clientfd,&ev)==-1){
-                            perror("Epoll add:");
-                            continue;
-                        }
-                        setnonblocking(clientfd);
-                        number++;
-                    }
-                //   sem_post(&sem_socket);
-                }
-
-            }else{
-                if(events[i].events&EPOLLIN){
-                    //处理读事件
-                    Connect_t *con=(Connect_t*)events[i].data.ptr;
-
-
-                    int len=read(con->fd,con->read_buf,1024);
-                    if(len<=0){
-                        printf("Nothing to read why remind me ???\n");
-                        sleep(100);
-                        break;
-                        continue;
-                    }else{
-                          printf("Receive: %s\n",con->read_buf);
-                          printf("Receive %d bytes\n",len);
-                    }
-                    con->read_buf[len]='\0';
-                    con->request->fd=sfd;
-
-                    http_parse(con->read_buf,con->request);
-
-                    struct epoll_event ev;
-                    bzero(&ev,sizeof(ev));
-                    ev.data.ptr=events[i].data.ptr;
-                    ev.events=EPOLLOUT;
-                    if(epoll_ctl(epollfd,EPOLL_CTL_MOD,con->fd,&ev)==-1){
-
-                        perror("Epoll mod");
-                    }
-
-                }
-                else if(events[i].events&EPOLLOUT){
-
-                    //处理写事件
-                    response(((Connect_t *)events[i].data.ptr)->request);
-
-                    //删除监听事件
-                    connect_delete(events[i].data.ptr);
-
-                    register_event(epollfd,sfd,EPOLL_CTL_DEL,EPOLLIN);
-
-                    close(sfd);//关闭连接
-
-                    number--;
-                }else{
-                    printf("Something else\n");
-                }
-            }
-        }
-    }
-}
-#else
+//
+//#ifdef _Linux
+//void main_loop(int serverfd){
+//
+//    int epollfd=epoll_create1(0);
+//
+//    register_event(epollfd,serverfd,EPOLL_CTL_ADD,EPOLLIN);
+//
+//    struct epoll_event events[MAX_EVENT];
+//    int number=0;
+//    int ret=0;
+//
+//    while(1){
+//
+//        if(run==0){
+//            if(worker==0&&multiprocess==1){
+//                write(STDOUT_FILENO,"Kill",4);
+//                kill(workerpid[0],15);
+//                kill(workerpid[1],15);
+//            }
+//            printf("%d will stop\n",getpid());
+//            break;
+//        }
+//
+//        ret=epoll_wait(epollfd,&events,MAX_EVENT,-1);
+//        if(ret<0){
+//            perror("Epoll_wait");
+//            continue;
+//        }
+//
+//        int i=0;
+//        for(;i<ret;i++){
+//           int sfd=((Connect_t*)events[i].data.ptr)->fd;
+//            if(sfd==serverfd){
+//
+//                if(events[i].events&EPOLLIN){
+//               //     sem_wait(&sem_socket);
+//                    if(number<MAX_EVENT) {
+//                        struct sockaddr_in client_addr;
+//                        socklen_t len = sizeof(client_addr);
+//                        int clientfd = accept(serverfd, (struct sockaddr *) &client_addr, &len);
+//                        if (clientfd < 0) {
+//                            perror("Accept");
+//                            continue;
+//                        }
+//                        printf("process %d accept client %d  \n",getpid(),clientfd);
+//
+//                        Connect_t *con=connect_create();
+//                        con->fd=clientfd;con->addr=client_addr;
+//
+//
+//                        struct epoll_event ev;
+//                        bzero(&ev,sizeof(ev));
+//                        ev.data.ptr=con;
+//                        ev.events=EPOLLIN|EPOLLET;
+//
+//                        if(epoll_ctl(epollfd,EPOLL_CTL_ADD,clientfd,&ev)==-1){
+//                            perror("Epoll add:");
+//                            continue;
+//                        }
+//                        setnonblocking(clientfd);
+//                        number++;
+//                    }
+//                //   sem_post(&sem_socket);
+//                }
+//
+//            }else{
+//                if(events[i].events&EPOLLIN){
+//                    //处理读事件
+//                    Connect_t *con=(Connect_t*)events[i].data.ptr;
+//
+//
+//                    int len=read(con->fd,con->read_buf,1024);
+//                    if(len<=0){
+//                        printf("Nothing to read why remind me ???\n");
+//                        sleep(100);
+//                        break;
+//                        continue;
+//                    }else{
+//                          printf("Receive: %s\n",con->read_buf);
+//                          printf("Receive %d bytes\n",len);
+//                    }
+//                    con->read_buf[len]='\0';
+//                    con->request->fd=sfd;
+//
+//                    http_parse(con->read_buf,con->request);
+//
+//                    struct epoll_event ev;
+//                    bzero(&ev,sizeof(ev));
+//                    ev.data.ptr=events[i].data.ptr;
+//                    ev.events=EPOLLOUT;
+//                    if(epoll_ctl(epollfd,EPOLL_CTL_MOD,con->fd,&ev)==-1){
+//
+//                        perror("Epoll mod");
+//                    }
+//
+//                }
+//                else if(events[i].events&EPOLLOUT){
+//
+//                    //处理写事件
+//                    response(((Connect_t *)events[i].data.ptr)->request);
+//
+//                    //删除监听事件
+//                    connect_delete(events[i].data.ptr);
+//
+//                    register_event(epollfd,sfd,EPOLL_CTL_DEL,EPOLLIN);
+//
+//                    close(sfd);//关闭连接
+//
+//                    number--;
+//                }else{
+//                    printf("Something else\n");
+//                }
+//            }
+//        }
+//    }
+//}
+//#else
 
 void accept_client(int fd, void *arg) {
 
@@ -246,7 +250,7 @@ void accept_client(int fd, void *arg) {
     }
     printf("process %d accept client %d  \n", getpid(), client);
     setnonblocking(client);
-    struct kevent chg;
+//    struct kevent chg;
     Connect_t *con = connect_create();
     con->fd = client;
 
@@ -264,18 +268,24 @@ void read_client(int fd, void *arg) {
 
     int len = read(con->fd, con->read_buf, 1024);
     if (len <= 0) {
-        printf("Nothing to read why remind me ???   %d\n", fd);
+        perror("Read");
+        if (errno != EAGAIN){
+            event_t *ev = new_event(fd, 1, CUTE_READ, write_client, con);
+            reactor_del((Reactor *) con->backend, ev);
+            close(fd);
+        }
         return;
     } else {
         printf("Receive %d bytes\n ", len);
-        printf("%s\n", con->read_buf);
     }
     con->read_buf[len] = '\0';
     con->request->fd = fd;
 
     http_parse(con);
+    event_t *ev = new_event(fd, 1, CUTE_READ, write_client, con);
+    reactor_del((Reactor *) con->backend, ev);
 
-    event_t *ev = new_event(fd, 1, CUTE_WRITE, write_client, con);
+    ev = new_event(fd, 1, CUTE_WRITE, write_client, con);
     reactor_add((Reactor *) con->backend, ev);
 }
 
@@ -409,8 +419,8 @@ void main_loop2(int server_fd) {
 //         }
 //     }
 //}
-
-#endif
+//
+//#endif
 
 void signal_handler(int sig) {
 
@@ -450,31 +460,31 @@ void addsiggg(int sig) {
     sigfillset(&sa.sa_mask);
     assert(sigaction(sig, &sa, NULL) != -1);
 }
-
-#ifdef _Linux
-void register_event(int epollfd,int fd, unsigned int op,unsigned int e){
-    if(op&EPOLL_CTL_DEL){
-        epoll_ctl(epollfd,op,fd,NULL);
-        return;
-    }
-
-    struct epoll_event event;
-    bzero(&event,sizeof(event));
-    Connect_t* con=connect_create();
-    con->fd=fd;
-    event.data.ptr=con;
-    event.events=e;
-    epoll_ctl(epollfd,op,fd,&event);
-
-    return;
-}
-#else
-
-void register_event(int kfd, int fd, unsigned op, unsigned e) {
-
-}
-
-#endif
+//
+//#ifdef _Linux
+//void register_event(int epollfd,int fd, unsigned int op,unsigned int e){
+//    if(op&EPOLL_CTL_DEL){
+//        epoll_ctl(epollfd,op,fd,NULL);
+//        return;
+//    }
+//
+//    struct epoll_event event;
+//    bzero(&event,sizeof(event));
+//    Connect_t* con=connect_create();
+//    con->fd=fd;
+//    event.data.ptr=con;
+//    event.events=e;
+//    epoll_ctl(epollfd,op,fd,&event);
+//
+//    return;
+//}
+//#else
+//
+//void register_event(int kfd, int fd, unsigned op, unsigned e) {
+//
+//}
+//
+//#endif
 
 int setnonblocking(int fd) {
     int old_option = fcntl(fd, F_GETFL);
