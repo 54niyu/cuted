@@ -3,7 +3,7 @@
 //
 //
 
-//#define _Linux
+#define _Linux
 
 #ifdef _Linux
 #include <sys/epoll.h>
@@ -29,11 +29,9 @@ void addsiggg(int sig);
 
 
 void read_client(int, void *);
-
 void write_client(int, void *);
-
 void accept_client(int, void *);
-
+void handle_signal(int, void *);
 void main_loop2(int);
 
 int worker = 0;
@@ -43,12 +41,14 @@ int run = 0;
 
 int main(int argc, char *argv[]) {
 
+    signal(SIGUSR1, SIG_IGN);
+    signal(SIGUSR2, SIG_IGN);
+
     handle_configure();
 
     int serverfd = bind_server("127.0.0.1", 9905);
 
-    register_signal();//注册事件处理
-
+//    register_signal();//注册事件处理
     if (multiprocess == 1) {
         //多线程模式
         int i = 0;
@@ -133,7 +133,7 @@ void accept_client(int fd, void *arg) {
     event_t *ev = new_event(client, 1, CUTE_READ, read_client, con);
     Reactor *rc = (Reactor *) arg;
     con->backend = rc;
-    reactor_add(rc, ev);
+    reactor_add(rc, ev, NULL);
 }
 
 void read_client(int fd, void *arg) {
@@ -161,7 +161,7 @@ void read_client(int fd, void *arg) {
     reactor_del((Reactor *) con->backend, ev);
 
     ev = new_event(fd, 1, CUTE_WRITE, write_client, con);
-    reactor_add((Reactor *) con->backend, ev);
+    reactor_add((Reactor *) con->backend, ev, NULL);
 }
 
 void write_client(int fd, void *arg) {
@@ -174,16 +174,34 @@ void write_client(int fd, void *arg) {
     close(fd);//关闭连接
 }
 
+void handle_timeout(int fd, void* arg){
+    static int count = 0;
+    printf("Halo\n");
+    count++;
+    if( count > 10){
+        event_t *ev = arg;
+        reactor_del(ev->rc,ev);
+    }
+}
+
 void main_loop(int server_fd) {
 
     Reactor *rc = reactor_create();
     event_t *sev = new_event(server_fd, 1, CUTE_READ | CUTE_PERSIST, accept_client, rc);
+    event_t  *sigev = new_event(SIGUSR1, CUTE_SIGNAL ,CUTE_SIGNAL | CUTE_PERSIST, handle_signal, rc);
+    event_t *tev = new_event(-1, CUTE_TIMEOUT, CUTE_TIMEOUT|CUTE_PERSIST, handle_timeout , rc);
+    tev->arg = tev;
 
-    reactor_add(rc, sev);
-
+    reactor_add(rc, sev,NULL);
+    reactor_add(rc, sigev,NULL);
+    struct timeval *tm = (struct timeval *)malloc(sizeof(struct timeval));
+    tm->tv_sec = 1;
+    tm->tv_usec = 0;
+    reactor_add(rc, tev, tm);
     reactor_loop(rc);
 
 }
+
 
 void signal_handler(int sig) {
 
@@ -203,7 +221,10 @@ void signal_handler(int sig) {
             run = 0;
         };
     }
-    exit(0);
+}
+
+void handle_signal(int fd, void* arg){
+    signal_handler(fd);
 }
 
 void register_signal() {

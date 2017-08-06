@@ -21,17 +21,17 @@ typedef struct {
     short int size;
 } vector;
 
-vector *vectorMakeSize(int len, int size);
+vector *vector_make_size(int len, int size);
 
-vector *vectorMake(int size);
+vector *vector_make(int size);
 
-void vectorDestroy(vector *v);
+void vector_destroy(vector *v);
 
-void *vectorIn(vector *v, int idx);
+void *vector_in(vector *v, int idx);
 
-void *vectorPush(vector *v, void *val);
+void *vector_push(vector *v, void *val);
 
-void vectorPop(vector *v);
+void vector_pop(vector *v);
 
 // ---------------------------------------------
 typedef struct {
@@ -63,14 +63,14 @@ typedef struct {
     void (*deleteKey)(void *);
 } map;
 
-map *mapMake();
+map *map_make();
 
-bucket *bucketMake();
+bucket *bucket_make();
 
-void *mapFind(map *m, void *key);
+void *map_find(map *m, void *key);
 
-void *mapInsert(map *m, void *key, void *val);
+void *map_insert(map *m, void *key, void *val);
 
-void mapPrint(map* m);
+void map_print(map *m);
 
 #endif

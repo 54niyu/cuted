@@ -1,6 +1,6 @@
 #include "container.h"
 
-bucket *bucketMake() {
+bucket *bucket_make() {
     bucket *b = (bucket *) malloc(sizeof(bucket));
     if (b == NULL) {
         perror("malloc bucket");
@@ -8,7 +8,7 @@ bucket *bucketMake() {
     return b;
 }
 
-void *mapFind(map *m, void *key) {
+void *map_find(map *m, void *key) {
 
     bucket **idx = NULL;
     bucket *b = NULL;
@@ -70,11 +70,11 @@ void *mapFind(map *m, void *key) {
     }
 }
 
-void *mapGrow(map *m) {
+void *map_grow(map *m) {
     // twice bucket size
     printf("grow %d %d %d\n", m->size, m->count, m->oldcount);
     if (m->oldbuckets != NULL && m->oldcount != 0) {
-        printf("Old is not empty\n");
+        printf("Old is not empty\n move all \n");
         return NULL;
     }
     m->size++;
@@ -84,12 +84,12 @@ void *mapGrow(map *m) {
     return NULL;
 }
 
-void *mapInsert(map *m, void *key, void *val) {
+void *map_insert(map *m, void *key, void *val) {
     if ((m->count * 1.0 / (1 << m->size)) > 0.65) {
         // rehash
-        mapGrow(m);
+        map_grow(m);
     }
-    bucket *b = mapFind(m, key);
+    bucket *b = map_find(m, key);
     if (b != NULL) {
         // overrite value
         b->val = val;
@@ -99,7 +99,7 @@ void *mapInsert(map *m, void *key, void *val) {
         bucket **pos = NULL;
         pos = m->buckets + hash;
 
-        b = bucketMake();
+        b = bucket_make();
         b->key = m->copyKey(key);
         b->val = val;
         b->next = *pos;
@@ -109,7 +109,7 @@ void *mapInsert(map *m, void *key, void *val) {
     return NULL;
 }
 
-map *mapMake() {
+map *map_make() {
     map *m = (map *) calloc(1, sizeof(map));
     m->size = 3;
     m->count = 0;
@@ -118,7 +118,7 @@ map *mapMake() {
 }
 
 
-void bucketPrint(bucket **b, int sz) {
+void bucket_print(bucket **b, int sz) {
     int i = 0;
     for (; i < sz; i++) {
         bucket **p = b + i;
@@ -134,11 +134,11 @@ void bucketPrint(bucket **b, int sz) {
     }
 }
 
-void mapPrint(map *m) {
+void map_print(map *m) {
     printf("%d %d %d\n", m->size, m->count, m->oldcount);
     if (m->oldbuckets != NULL) {
-        bucketPrint(m->oldbuckets, (1 << (m->size - 1)) - 1);
+        bucket_print(m->oldbuckets, (1 << (m->size - 1)) - 1);
     }
     printf("New buckets\n");
-    bucketPrint(m->buckets, (1 << (m->size)) - 1);
+    bucket_print(m->buckets, (1 << (m->size)) - 1);
 }

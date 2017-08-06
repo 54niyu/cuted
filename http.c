@@ -149,6 +149,7 @@ void http_handle(Connect_t *con) {
     Request_t *req = con->request;
     char path[256] = {'\0'};
     char *base = "/Users/Bing/Downloads/AmazeUI-2.7.2";
+//    char *base = "/Users/Bing/Code/mysite/public";
     strncpy(path, base, strlen(base));
     strncpy(path + strlen(base), req->uri.str, req->uri.size);
     //uri初始化路径
@@ -189,6 +190,7 @@ void http_handle(Connect_t *con) {
 
 
     req->stat_code = 2;
+    close(fd);
 }
 
 void response(Connect_t *con) {
@@ -198,15 +200,16 @@ void response(Connect_t *con) {
     switch (req->stat_code) {
         case 2: {
             char *s = "HTTP/1.1 200 OK\r\n\r\n";
+
             write(req->fd, s, strlen(s));
-            //sendfile(req->fd,req->file_fd,NULL,req->file_size);
+//            sendfile(req->fd,req->file_fd,NULL,req->file_size);
             write(req->fd, con->write_buf, req->file_size);
             munmap(con->write_buf, req->file_size);
             con->write_buf = NULL;
         };
             break;
         case 4: {
-            char *s = "HTTP/1.1 400 BAD REQUEST\r\n\r\n";
+            char *s = "HTTP/1.1 404 BAD REQUEST\r\n\r\n";
             write(req->fd, s, strlen(s));
         };
             break;

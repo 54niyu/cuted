@@ -6,10 +6,7 @@
 #define HTTP_EVENT_H
 
 #include <time.h>
-
-#define CUTE_IO 1
-#define CUTE_SIG 2
-#define CUTE_TM 4
+#include "contianer/container.h"
 
 #define CUTE_READ 1
 #define CUTE_WRITE 2
@@ -17,11 +14,16 @@
 #define CUTE_TIMEOUT 8
 #define CUTE_PERSIST 16
 
-typedef struct timer_t {
+struct timer_t {
+    struct timer_t *next;
+    struct event *ev;
+};
 
-} Timer;
+typedef void (*event_cb)(int fd, void *arg);
 
 typedef struct event {
+
+    struct reactor * rc;
 
     short type;
     short flags;
@@ -38,11 +40,16 @@ typedef struct reactor {
     struct back_op *func_back;
     void *data_back;
 
+    // active events
+    event_t **active_events;
+    int nactive_events;
+
     //signal
     int signal_fd[2];//信号处理
+    struct event *signal_map[32];
 
     //timer
-    Timer *timer_list;//定时器
+    struct timer_t *timer_list;//定时器
 
     struct timeval *timeout;
 
@@ -72,7 +79,7 @@ event_t *new_event(int fd, short type, short flag, void (*cb)(int fd, void *), v
 
 Reactor *reactor_create();
 
-int reactor_add(Reactor *rt, event_t *ev);
+int reactor_add(Reactor *rt, event_t *ev, struct timeval *tm);
 
 int reactor_del(Reactor *rt, event_t *ev);
 

@@ -6,6 +6,7 @@
 #include <sys/event.h>
 #include <stdio.h>
 #include "event.h"
+#include "contianer/container.h"
 
 #define NEVENT 64
 
@@ -83,6 +84,8 @@ int kq_add(struct reactor *rc,int fd,short op,void *data){
     struct kq_op_data *op_data = (struct kq_op_data*)rc->data_back;
 
     short flag = 0;
+    intptr_t  _data = 0 ;
+    short fflag = 0;
 	if ((op & CUTE_READ)){
         flag |= EVFILT_READ;
 	}
@@ -92,12 +95,18 @@ int kq_add(struct reactor *rc,int fd,short op,void *data){
     if ( op &CUTE_SIGNAL){
         flag |= EVFILT_SIGNAL;
     }
+    if ( op & CUTE_TIMEOUT){
+        struct timeval *tm = ((event_t*)data)->timeout;
+        _data = tm->tv_sec * 1000 * 1000  + tm->tv_usec;
+        fflag |= NOTE_USECONDS;
+        flag |= EVFILT_TIMER;
+    }
 
     // one shot
     if (op & CUTE_PERSIST){
-        EV_SET(op_data->changes, fd, flag, EV_ADD, 0, 0, data);
+        EV_SET(op_data->changes, fd, flag, EV_ADD, fflag, _data, data);
     }else{
-        EV_SET(op_data->changes, fd, flag, EV_ADD|EV_ONESHOT, 0, 0, data);
+        EV_SET(op_data->changes, fd, flag, EV_ADD|EV_ONESHOT, fflag, _data, data);
     }
 
 	return kevent(op_data->kq, op_data->changes, 1, NULL, 0, NULL);
@@ -119,6 +128,9 @@ int kq_del(struct reactor *rc,int fd,short op,void *data) {
     if (op & CUTE_SIGNAL){
         flag |= EVFILT_SIGNAL;
     }
+    if ( op & CUTE_TIMEOUT){
+        flag |= EVFILT_TIMER;
+    }
 
     EV_SET(op_data->changes,fd,flag,EV_DISABLE|EV_DELETE, 0,0,data);
     return kevent(op_data->kq, op_data->changes, 1, NULL, 0, NULL);
@@ -130,18 +142,27 @@ int kq_dispatch(struct reactor *rc,struct timeval *tm){
     if(rc == NULL)  return -1;
     struct kq_op_data *op_data = (struct kq_op_data*)rc->data_back;
 
+    struct timespec tms = {
+            rc->timeout->tv_sec,
+            rc->timeout->tv_usec * 1000,
+    };
     int n=0;
-    if ((n=kevent(op_data->kq,NULL,0,op_data->events,op_data->events_size,NULL)) == -1){
+    if ((n=kevent(op_data->kq,NULL,0,op_data->events,op_data->events_size,&tms)) == -1){
         perror("Kevent dispath");
         exit(-1);
     }else{
+        rc->active_events = (event_t**)malloc(sizeof(event_t*) * n);
+        rc->nactive_events  = 0;
         int i=0;
         for(i=0;i<n;i++){
             event_t *ev = (event_t*)(op_data->events[i].udata);
             if (op_data->events[i].flags & EV_EOF){
-                printf("EOG %d %s",ev->fd, op_data->events[i].fflags);
+                printf("EV_ERROR: %s\n", strerror(op_data->events[i].data));
+            }else if( op_data->events[i].flags & EV_ERROR){
+                printf("EV_ERROR: %s\n", strerror(op_data->events[i].data));
             }else{
-                ev->cb_function(ev->fd,ev->arg);
+                rc->active_events[i] = ev;
+                rc->nactive_events ++ ;
             }
         }
     }
@@ -160,14 +181,14 @@ int kq_free(struct reactor *rc){
 }
 
 
-int sg_init(struct reactor *rc){
-
+int kq_sg_init(struct reactor *rc){
+    return 0;
 }
 
-int sg_add(struct reactor *rc){
-
+int kq_sg_add(struct reactor *rc){
+    return 0;
 }
 
-int sg_del(struct reactor *rc){
-
+int kq_sg_del(struct reactor *rc){
+    return 0;
 }
