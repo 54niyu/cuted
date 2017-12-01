@@ -17,12 +17,12 @@ int kq_dispatch(struct reactor *rc, struct timeval *tm);
 int kq_free(struct reactor *rc);
 
 struct back_op kq_op_func= {
-        "kqueue",
-        kq_init,
-        kq_add,
-        kq_del,
-        kq_dispatch,
-        kq_free,
+    "kqueue",
+    kq_init,
+    kq_add,
+    kq_del,
+    kq_dispatch,
+    kq_free,
 };
 
 struct kq_op_data {
@@ -88,13 +88,14 @@ int kq_add(struct reactor *rc,int fd,short op,void *data){
     short flag = 0;
     intptr_t  _data = 0 ;
     short fflag = 0;
-	if ((op & CUTE_READ)){
+    if ((op & CUTE_READ)){
         flag |= EVFILT_READ;
-	}
-	if ( op & CUTE_WRITE){
+    }
+    if ( op & CUTE_WRITE){
         flag |= EVFILT_WRITE;
-	}
+    }
     if ( op &CUTE_SIGNAL){
+        signal(fd, SIG_IGN);
         flag |= EVFILT_SIGNAL;
     }
     if ( op & CUTE_TIMEOUT){
@@ -111,7 +112,7 @@ int kq_add(struct reactor *rc,int fd,short op,void *data){
         EV_SET(op_data->changes, fd, flag, EV_ADD|EV_ONESHOT, fflag, _data, data);
     }
 
-	return kevent(op_data->kq, op_data->changes, 1, NULL, 0, NULL);
+    return kevent(op_data->kq, op_data->changes, 1, NULL, 0, NULL);
 }
 
 int kq_del(struct reactor *rc,int fd,short op,void *data) {
@@ -121,12 +122,12 @@ int kq_del(struct reactor *rc,int fd,short op,void *data) {
 
     short flag = 0;
 
-	if ((op & CUTE_READ)){
+    if ((op & CUTE_READ)){
         flag |= EVFILT_READ;
-	}
-	if (op & CUTE_WRITE){
+    }
+    if (op & CUTE_WRITE){
         flag |= EVFILT_WRITE;
-	}
+    }
     if (op & CUTE_SIGNAL){
         flag |= EVFILT_SIGNAL;
     }
@@ -145,8 +146,8 @@ int kq_dispatch(struct reactor *rc,struct timeval *tm){
     struct kq_op_data *op_data = (struct kq_op_data*)rc->data_back;
 
     struct timespec tms = {
-            rc->timeout->tv_sec,
-            rc->timeout->tv_usec * 1000,
+        rc->timeout->tv_sec,
+        rc->timeout->tv_usec * 1000,
     };
     int n=0;
     if ((n=kevent(op_data->kq,NULL,0,op_data->events,op_data->events_size,&tms)) == -1){
