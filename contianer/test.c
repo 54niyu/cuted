@@ -94,6 +94,7 @@ void test_map() {
     for (; i < 200; i++) {
         map_insert(m, test[i % 17], a + i % 17);
     }
+
     printf("Over\n");
     for (i = 0; i < 200; i++) {
         bucket* val = map_find(m, test[i % 17]);

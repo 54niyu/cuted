@@ -34,6 +34,8 @@ struct kq_op_data {
     int changes_size;
 };
 
+struct back_op kq_op_func;
+struct back_op *op_func = &kq_op_func;
 
 int kq_init(struct reactor *rc){
 
