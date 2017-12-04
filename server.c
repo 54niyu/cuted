@@ -122,7 +122,7 @@ void accept_client(int fd, void *arg) {
     printf("process %d accept client %d  \n", getpid(), client);
     set_nonblocking(client);
     //    struct kevent chg;
-    Connect_t *con = connect_create();
+    connect_t *con = connect_create();
     con->fd = client;
 
     event_t *ev = new_event(client, 1, CUTE_READ, read_client, con);
@@ -134,7 +134,7 @@ void accept_client(int fd, void *arg) {
 void read_client(int fd, void *arg) {
 
     printf("reading from %d..\n", fd);
-    Connect_t *con = arg;
+    connect_t *con = arg;
 
     int len = read(con->fd, con->read_buf, 1024);
     if (len <= 0) {

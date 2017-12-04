@@ -82,7 +82,7 @@ int kq_init(struct reactor *rc){
 
 int kq_add(struct reactor *rc,int fd,short op,void *data){
 
-    if(rc == NULL)	return -1;
+    if(rc == NULL)  return -1;
     struct kq_op_data *op_data = (struct kq_op_data*)rc->data_back;
 
     short flag = 0;

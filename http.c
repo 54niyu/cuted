@@ -9,37 +9,37 @@
 #include <fcntl.h>
 #include "contianer/container.h"
 
-void http_handle(Connect_t *con);
+void http_handle(connect_t *con);
 
 
-Request_t *request_create() {
-    Request_t *request = (Request_t *) calloc(1, sizeof(Request_t));
+request_t *request_create() {
+    request_t *request = (request_t *) calloc(1, sizeof(request_t));
     request->header = (Str_t *) calloc(20, sizeof(Str_t));
     return request;
 }
 
-void request_delete(Request_t *request) {
+void request_delete(request_t *request) {
     free(request->header);
     free(request);
 }
 
-Connect_t *connect_create() {
-    Connect_t *con = (Connect_t *) calloc(1, sizeof(Connect_t));
+connect_t *connect_create() {
+    connect_t *con = (connect_t *) calloc(1, sizeof(connect_t));
     con->read_buf = (char *) malloc(2048);
     con->write_buf = (char *) malloc(10240);
     con->request = request_create();
     return con;
 }
 
-void connect_delete(Connect_t *con) {
+void connect_delete(connect_t *con) {
     request_delete(con->request);
     free(con->read_buf);
     free(con);
 }
 
-Request_t *http_parse(Connect_t *con) {
+request_t *http_parse(connect_t *con) {
     char *ptr = con->read_buf;
-    Request_t *request = con->request;
+    request_t *request = con->request;
     if (*ptr == 'G') {
         if (strncmp(ptr, "GET", 3) == 0)
             ptr += 3;
@@ -144,9 +144,9 @@ Request_t *http_parse(Connect_t *con) {
 
 }
 
-void http_handle(Connect_t *con) {
+void http_handle(connect_t *con) {
 
-    Request_t *req = con->request;
+    request_t *req = con->request;
     char path[256] = {'\0'};
     char *base = "/Users/Bing/Downloads/AmazeUI-2.7.2";
 //    char *base = "/Users/Bing/Code/mysite/public";
@@ -193,9 +193,9 @@ void http_handle(Connect_t *con) {
     close(fd);
 }
 
-void response(Connect_t *con) {
+void response(connect_t *con) {
 
-    Request_t *req = con->request;
+    request_t *req = con->request;
 
     switch (req->stat_code) {
         case 2: {

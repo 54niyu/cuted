@@ -47,21 +47,21 @@ typedef struct Request{
     Str_t buf;
     int file_fd;
     int file_size;
-} Request_t;
+} request_t;
 
-typedef struct connect_t{
+typedef struct connect{
     int fd;
     struct sockaddr_in addr;
     char* read_buf;
     char* write_buf;
-    Request_t *request;
+    request_t *request;
     void* backend;
-} Connect_t;
+} connect_t;
 
-Request_t* request_create();
-void request_delete(Request_t *req);
-Request_t* http_parse(Connect_t* con);
-void response(Connect_t* con);
-Connect_t *connect_create();
-void connect_delete(Connect_t *con);
+request_t* request_create();
+void request_delete(request_t *req);
+request_t* http_parse(connect_t* con);
+void response(connect_t* con);
+connect_t *connect_create();
+void connect_delete(connect_t *con);
 #endif //HTTP_HTTP_H
