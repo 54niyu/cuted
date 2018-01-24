@@ -1,6 +1,6 @@
 #include "container.h"
 
-vector* vector_make_size(int len, int size){
+vector* vector_make_size(unsigned int len, unsigned int size){
     vector* v = (vector*)malloc(sizeof(vector));
     if( v == NULL){
 	perror("vector malloc");

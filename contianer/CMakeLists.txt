@@ -4,7 +4,7 @@ project(lib)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c99")
 
 set(SOURCE_FILES
-    main.c
+    test.c
     map.c
     vector.c)
 

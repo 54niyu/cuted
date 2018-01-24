@@ -13,6 +13,6 @@ else(LINUX)
     set(SOURCE_FILES event.c http.c epoll.c server.c timer.c signal.c)
 endif(APPLE)
 
-#add_subdirectory(contianer)
+add_subdirectory(contianer)
 add_executable(Http ${SOURCE_FILES})
 TARGET_LINK_LIBRARIES(Http pthread)

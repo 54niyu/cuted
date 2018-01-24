@@ -18,10 +18,10 @@ typedef struct {
     void *array;
     unsigned int len;
     unsigned int cap;
-    short int size;
+    unsigned int size;
 } vector;
 
-vector *vector_make_size(int len, int size);
+vector *vector_make_size(unsigned int len, unsigned int size);
 
 vector *vector_make(int size);
 
@@ -63,14 +63,13 @@ typedef struct {
     void (*deleteKey)(void *);
 } map;
 
-map *map_make();
+map* map_make();
+bucket* bucket_make();
 
-bucket *bucket_make();
-
-void *map_find(map *m, void *key);
-
-void *map_insert(map *m, void *key, void *val);
-
-void map_print(map *m);
+void* map_get(map *m, void *key);
+void* map_set(map *m,void *key, void *nval);
+void* map_ite(map *m);
+void  map_del(map *m,void *key);
+void  map_print(map *m);
 
 #endif

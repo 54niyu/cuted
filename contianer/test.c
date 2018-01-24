@@ -13,13 +13,13 @@ void test_vector() {
         vector_push(v, &i);
     }
     printf("%d\n",v->len);
-    for (i = 0; i < (*v).len; i++) {
+    for (i = 0; i < (int)v->len; i++) {
         printf("%d\n", *((int *) vector_in(v, i)));
     }
     for (i = 0; i < 50; i++) {
         vector_pop(v);
     }
-    for (i = 0; i < (*v).len; i++) {
+    for (i = 0; i < (int)v->len; i++) {
         printf("%d\n", *((int *) vector_in(v, i)));
     }
     char c[] = "123456789";
@@ -92,12 +92,12 @@ void test_map() {
 
     int i = 0;
     for (; i < 200; i++) {
-        map_insert(m, test[i % 17], a + i % 17);
+        map_set(m, test[i % 17], a + i % 17);
     }
 
     printf("Over\n");
     for (i = 0; i < 200; i++) {
-        bucket* val = map_find(m, test[i % 17]);
+        bucket* val = map_get(m, test[i % 17]);
         if (val == NULL) {
             printf("not found");
         } else {

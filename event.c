@@ -1,8 +1,6 @@
 #include"event.h"
 #include<stdlib.h>
 
-#define _Linux
-
 extern struct back_op *op_func;
 
 event_t *new_event(int fd, short type, short flag, void (*cb)(int,void *), void *data){

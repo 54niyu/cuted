@@ -8,16 +8,15 @@ bucket *bucket_make() {
     return b;
 }
 
-void *map_find(map *m, void *key) {
+void *map_get(map *m, void *key) {
 
     bucket **idx = NULL;
-    bucket *b = NULL;
-    bucket *pre = NULL;
-    // find in oldbucket
+    bucket *b = NULL, *pre = NULL;
+
+    // search in oldbucket
     if (m->oldbuckets != NULL) {
         int hash = m->hash(key) % ((1 << (m->size - 1)) - 1);
-        idx = m->oldbuckets + hash;
-        b = *(idx);
+        b = *(m->oldbuckets + hash);
         pre = b;
         while (b != NULL) {
             if (m->compare(key, b->key) != 0) {
@@ -30,7 +29,6 @@ void *map_find(map *m, void *key) {
         if (b != NULL) {
             // move b to new buckets
             // new key idx
-            printf("Move\n");
             hash = m->hash(key) % ((1 << (m->size)) - 1);
             bucket **pos = m->buckets + hash;
             // remove from old bucket
@@ -43,22 +41,21 @@ void *map_find(map *m, void *key) {
             // add to new bucket
             b->next = *pos;
             *pos = b;
-
             (m->oldcount)--;
         }
     }
+
     if (m->oldbuckets != NULL && m->oldcount == 0) {
         free(m->oldbuckets);
         m->oldbuckets = NULL;
-        printf("remove old buckets\n");
     }
+
     if (b != NULL) {
         return b;
     } else {
-        // find in new buckets
+        // search in new buckets
         int hash = m->hash(key) % ((1 << m->size) - 1);
-        idx = m->buckets + hash;
-        b = *idx;
+        b = *(m->buckets + hash);
         while (b != NULL) {
             if (m->compare(key, b->key) != 0) {
                 b = b->next;
@@ -84,12 +81,13 @@ void *map_grow(map *m) {
     return NULL;
 }
 
-void *map_insert(map *m, void *key, void *val) {
+void *map_set(map *m, void *key, void *val) {
+
     if ((m->count * 1.0 / (1 << m->size)) > 0.65) {
         // rehash
         map_grow(m);
     }
-    bucket *b = map_find(m, key);
+    bucket *b = map_get(m, key);
     if (b != NULL) {
         // overrite value
         b->val = val;
@@ -109,6 +107,15 @@ void *map_insert(map *m, void *key, void *val) {
     return NULL;
 }
 
+void
+map_del(map *m, void *key) {
+
+    bucket *b =(bucket*)map_get(m, key);
+    if (b != NULL) {
+    }
+
+};
+
 map *map_make() {
     map *m = (map *) calloc(1, sizeof(map));
     m->size = 3;
@@ -116,7 +123,6 @@ map *map_make() {
     m->buckets = (bucket **) calloc(8, sizeof(bucket *));
     return m;
 }
-
 
 void bucket_print(bucket **b, int sz) {
     int i = 0;
